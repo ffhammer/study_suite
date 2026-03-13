@@ -33,31 +33,25 @@ class GeminiLearningAgent(BaseLearningAgent):
             if not path.exists():
                 continue
 
-            # Read file as raw bytes. The modern SDK automatically handles base64 encoding
-            # under the hood for you when hitting the REST endpoints.
-            file_bytes = path.read_bytes()
             mime_type, _ = mimetypes.guess_type(path)
-
-            if not mime_type:
-                mime_type = "application/octet-stream"
+            file_bytes = path.read_bytes()
 
             if mime_type == "application/pdf":
-                # Native PDF Document processing [2]
                 context_parts.append(
                     types.Part.from_bytes(data=file_bytes, mime_type="application/pdf")
                 )
-            elif mime_type.startswith("image/"):
-                # High-Resolution Image processing natively.
-                # Gemini automatically scales image context up to 3072x3072px preserving detail. [3]
+            elif mime_type and mime_type.startswith("image/"):
                 context_parts.append(
                     types.Part.from_bytes(data=file_bytes, mime_type=mime_type)
                 )
             else:
-                # Text/Markdown/Code files fall back to raw strings
-                text_content = (
-                    f"\n--- File: {path.name} ---\n{file_bytes.decode('utf-8')}\n"
-                )
-                context_parts.append(text_content)
+                # Safe decoding for text-based files
+                try:
+                    text_content = file_bytes.decode("utf-8")
+                    context_parts.append(f"\n[File: {path.name}]\n{text_content}\n")
+                except UnicodeDecodeError:
+                    # Skip binary files that aren't images/PDFs
+                    continue
 
         # 4. Format multi-turn conversation history correctly
         # Instead of using a stateful chat session, passing structured `Content` objects

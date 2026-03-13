@@ -5,7 +5,8 @@ from sqlalchemy import event
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel, select
 
-from ..config import ApiConfig
+from src.backend.config import ApiConfig
+
 from .models import *  # noqa: F401
 
 

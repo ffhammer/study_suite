@@ -1,16 +1,26 @@
+import asyncio
 import mimetypes
 import shutil
 import tempfile
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    UploadFile,
+)
 from fastapi.responses import FileResponse
 from loguru import logger
 
 from src.backend.config import ApiConfig
 from src.backend.database.db import DataBase
 from src.backend.database.models import ResourceMeta, TextUpdate
+from src.backend.transcription import extract_audio_sync, run_whisper_sync
 
 file_router = APIRouter(prefix="/files", tags=["files"])
 
@@ -254,3 +264,109 @@ async def upload_file(
         raise HTTPException(status_code=500, detail="Write failed")
     finally:
         await file.close()
+
+
+async def background_transcription_worker(
+    course_name: str, rel_path: str, config: ApiConfig, db: DataBase, jobs_dict: dict
+):
+    job_id = f"{course_name}/{rel_path}"
+    file_path = config.save_join_file_path(course_name, rel_path)
+    audio_path = file_path
+
+    try:
+        # Step 1: Handle Video -> Audio Extraction
+        if file_path.suffix in config.VIDEO_SUFFIXES:
+            jobs_dict[job_id]["status"] = "extracting_audio"
+            audio_path = file_path.with_suffix(".mp3")
+
+            if not audio_path.exists():
+                await asyncio.to_thread(extract_audio_sync, file_path, audio_path)
+
+        # Step 2: Run Transcription
+        jobs_dict[job_id]["status"] = "starting_whisper"
+        final_text = await asyncio.to_thread(
+            run_whisper_sync, audio_path, job_id, jobs_dict
+        )
+
+        # Step 3: Save to Database
+        jobs_dict[job_id]["status"] = "saving"
+
+        meta = await db.query_table(
+            ResourceMeta,
+            where_clauses=[
+                ResourceMeta.course == course_name,
+                ResourceMeta.relative_path == rel_path,
+            ],
+            mode="first",
+        )
+        if meta:
+            meta.transcript_text = final_text
+            await db.save(meta)
+
+        # Step 4: Cleanup
+        jobs_dict[job_id]["status"] = "completed"
+        jobs_dict[job_id]["progress"] = jobs_dict[job_id]["total"]
+
+        # If we created a temporary audio file from a video, delete it to save space
+        if file_path.suffix in config.VIDEO_SUFFIXES and audio_path.exists():
+            audio_path.unlink()
+
+    except Exception as e:
+        logger.error(f"Transcription failed for {job_id}: {e}")
+        jobs_dict[job_id]["status"] = "failed"
+        jobs_dict[job_id]["error"] = str(e)
+
+
+@file_router.post("/transcribe/{course_name}/{rel_path:path}")
+async def start_transcription(
+    course_name: str, rel_path: str, request: Request, background_tasks: BackgroundTasks
+):
+    """Triggers the transcription process in the background."""
+    config: ApiConfig = request.app.state.config
+    db: DataBase = request.app.state.db
+    jobs_dict: dict = request.app.state.transcription_jobs
+    job_id = f"{course_name}/{rel_path}"
+
+    file_path = config.save_join_file_path(course_name, rel_path)
+
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    # Guardrail: Check if it's a valid media file
+    valid_suffixes = config.AUDIO_SUFFIXES + config.VIDEO_SUFFIXES
+    if file_path.suffix not in valid_suffixes:
+        raise HTTPException(status_code=400, detail="Not a valid audio/video file")
+
+    # If already running, don't start it again
+    if job_id in jobs_dict and jobs_dict[job_id]["status"] not in [
+        "failed",
+        "completed",
+    ]:
+        return {"message": "Transcription already in progress", "job_id": job_id}
+
+    # Initialize progress state
+    jobs_dict[job_id] = {
+        "status": "queued",
+        "progress": 0,
+        "total": 1,  # Prevent division by zero in UI before duration is loaded
+        "error": None,
+    }
+
+    # Hand off to the background task (Client can now disconnect)
+    background_tasks.add_task(
+        background_transcription_worker, course_name, rel_path, config, db, jobs_dict
+    )
+
+    return {"message": "Transcription started", "job_id": job_id}
+
+
+@file_router.get("/transcribe/status/{course_name}/{rel_path:path}")
+async def get_transcription_status(course_name: str, rel_path: str, request: Request):
+    """Frontend polls this to update the progress bar."""
+    job_id = f"{course_name}/{rel_path}"
+    jobs_dict: dict = request.app.state.transcription_jobs
+
+    if job_id not in jobs_dict:
+        return {"status": "not_started"}
+
+    return jobs_dict[job_id]

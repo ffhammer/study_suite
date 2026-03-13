@@ -2,6 +2,7 @@ from sqlmodel import SQLModel, Field
 from typing import Optional
 from datetime import date, datetime
 from uuid import UUID
+from pydantic import BaseModel
 
 
 class CourseConfig(SQLModel, table=True):
@@ -39,3 +40,13 @@ class AnkiCard(SQLModel, table=True):
     course: str  # Foreign Key to CourseConfig.folder_name conceptually
     is_question: bool = False
     source_file: Optional[str] = None  # Helpful to know where it came from
+
+
+class SimpleAnkiCard(BaseModel):
+    a_content: str = Field(description="The Content of one site")
+    b_content: str = Field(description="The Content of translation/other site")
+    notes: Optional[str] = Field(
+        None, description="Optional notes and context or examples"
+    )
+    is_question: bool = False
+    course: str

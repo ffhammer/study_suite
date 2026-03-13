@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 from src.backend.database.db import DataBase
 from src.backend.config import ApiConfig
+from src.backend.routers.anki import anki_router
 
 from dotenv import load_dotenv
 
@@ -30,6 +31,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+app.include_router(anki_router)
 
 
 @app.get("/health")

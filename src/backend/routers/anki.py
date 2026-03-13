@@ -32,20 +32,23 @@ def inplace_update_anki_card_vals(card: AnkiCard, quality: int) -> None:
 
 
 @anki_router.get("/due")
-async def get_due(request: Request) -> list[AnkiCard]:
+async def get_due(request: Request, course: str | None = None) -> list[AnkiCard]:
     db: DataBase = request.app.state.db
 
-    return await db.query_table(
-        AnkiCard, where_clauses=[AnkiCard.next_date < datetime.now()]
-    )
+    where = [AnkiCard.next_date < datetime.now()]
+    if course is not None:
+        where.append(AnkiCard.course == course)
+
+    return await db.query_table(AnkiCard, where_clauses=where)
 
 
 @anki_router.get("/all")
-async def get_all(request: Request) -> list[AnkiCard]:
+async def get_all(request: Request, course: str | None = None) -> list[AnkiCard]:
     db: DataBase = request.app.state.db
 
     return await db.query_table(
         AnkiCard,
+        where_clauses=[AnkiCard.course == course] if course is not None else [],
     )
 
 
@@ -53,10 +56,10 @@ async def get_all(request: Request) -> list[AnkiCard]:
 async def save_all(cards: list[SimpleAnkiCard], request: Request):
     db: DataBase = request.app.state.db
 
-    courses = set(await db.query_table(CourseConfig))
+    courses = {i.folder_name for i in await db.query_table(CourseConfig)}
     for card in cards:
         if card.course not in courses:
-            return HTTPException(404, f"Course {card.course } does not exist")
+            raise HTTPException(404, f"Course {card.course } does not exist")
 
     cards = [AnkiCard(**card.model_dump(), id=uuid4()) for card in cards]
 
@@ -66,7 +69,7 @@ async def save_all(cards: list[SimpleAnkiCard], request: Request):
 @anki_router.put("/api/anki/{card_id}/review")
 async def review_card(card_id: int, quality: float, request: Request):
     if quality < 0 or quality > 5:
-        return HTTPException(400, detail=f"{quality} is invalid val")
+        raise HTTPException(400, detail=f"{quality} is invalid val")
 
     db: DataBase = request.app.state.db
 
@@ -74,7 +77,7 @@ async def review_card(card_id: int, quality: float, request: Request):
         AnkiCard, where_clauses=[AnkiCard.id == card_id], mode="first"
     )
     if card is None:
-        return HTTPException(404, detail="Card not found")
+        raise HTTPException(404, detail="Card not found")
 
     inplace_update_anki_card_vals(card, quality)
     await db.save(card)

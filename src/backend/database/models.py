@@ -1,4 +1,4 @@
-from sqlmodel import SQLModel, Field
+from sqlmodel import SQLModel, Field, ForeignKey, Column, String
 from typing import Optional
 from datetime import date, datetime
 from uuid import UUID
@@ -8,8 +8,7 @@ from pydantic import BaseModel
 class CourseConfig(SQLModel, table=True):
     """Tracks UI state for folders on the hard drive"""
 
-    id: Optional[int] = Field(default=None, primary_key=True)
-    folder_name: str = Field(unique=True, index=True)  # e.g., "Math101"
+    folder_name: str = Field(unique=True, index=True, primary_key=True)
     is_active: bool = Field(default=True)
 
 
@@ -17,12 +16,25 @@ class ResourceMeta(SQLModel, table=True):
     """Caches slow LLM/Whisper tasks so you don't re-run them"""
 
     id: Optional[UUID] = Field(default=None, primary_key=True)
+    course: str = Field(
+        sa_column=Column(
+            String,
+            ForeignKey(
+                "courseconfig.folder_name", onupdate="CASCADE", ondelete="CASCADE"
+            ),
+            index=True,
+        )
+    )
     relative_path: str = Field(
         unique=True, index=True
     )  # e.g., "CourseA/Lecture1/audio.mp3"
     is_transcribed: bool = Field(default=False)
     transcript_text: Optional[str] = None
+
+    # pass through types (Only filled in Tree, not Saved)
+
     last_processed: Optional[datetime] = None
+    size: Optional[int] = None
 
 
 class AnkiCard(SQLModel, table=True):

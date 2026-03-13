@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel, select
 from .models import *  # noqa: F401
 from ..config import ApiConfig
+from sqlalchemy import event
 
 
 class DataBase:
@@ -14,6 +15,12 @@ class DataBase:
 
     def __init__(self, config: ApiConfig):
         self.engine = create_async_engine(config.DATABASE_URL)
+
+        @event.listens_for(self.engine.sync_engine, "connect")
+        def set_sqlite_pragma(dbapi_connection, connection_record):
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
 
         self.session_maker = async_sessionmaker(self.engine, expire_on_commit=False)
 
@@ -35,10 +42,17 @@ class DataBase:
                 await sess.merge(obj)
             await sess.commit()
 
-    async def save(self, resp: Type[SQLModel]) -> None:
+    async def save(self, obj: SQLModel) -> SQLModel:
+        """
+        Merges the object into a session, commits it, and returns the refreshed version.
+        """
         async with self.session_maker() as sess:
-            await sess.merge(resp)
+            # merge 'attaches' your detached object to this session
+            merged = await sess.merge(obj)
             await sess.commit()
+            # refresh ensures we have the latest data (IDs, defaults, etc.)
+            await sess.refresh(merged)
+            return merged
 
     async def refresh_all(self):
         """

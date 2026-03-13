@@ -10,6 +10,7 @@ class ApiConfig(BaseSettings):
     VIDEO_SUFFIXES = [".mp4", ".mkv", ".mov"]
     AUDIO_SUFFIXES = [".mp3", ".wav", ".m4a"]
     IMG_SUFFIXES = [".png"]
+    LLM_MODEL = "gemini"  # the llm factory
 
     @property
     def DATABASE_URL(self):

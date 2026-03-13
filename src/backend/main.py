@@ -9,6 +9,8 @@ from src.backend.config import ApiConfig
 from src.backend.database.db import DataBase
 from src.backend.routers.anki import anki_router
 from src.backend.routers.files import file_router
+from src.backend.routers.llm import chat_router
+from src.backend.llm import load_agent
 
 
 @asynccontextmanager
@@ -25,6 +27,7 @@ async def lifespan(app: FastAPI):
     os.makedirs(app.config.VAULT_BASE_PATH, exist_ok=True)
     app.state.db = DataBase(config=app.config)
     app.state.transcription_jobs = {}
+    app.state.agent = load_agent(app.config)
 
     assert await app.state.db.check_health()
     await app.state.db.initialize_db()
@@ -36,6 +39,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.include_router(anki_router)
 app.include_router(file_router)
+app.include_router(chat_router)
 
 
 @app.get("/health")

@@ -1,9 +1,9 @@
 from datetime import date, datetime
 from typing import Optional
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from pydantic import BaseModel
-from sqlmodel import Column, Field, ForeignKey, SQLModel, String
+from sqlmodel import Column, Field, ForeignKey, Relationship, SQLModel, String
 
 
 class CourseConfig(SQLModel, table=True):
@@ -67,3 +67,45 @@ class SimpleAnkiCard(BaseModel):
 
 class TextUpdate(BaseModel):
     content: str
+
+
+class ChatSession(SQLModel, table=True):
+    """Groups messages together. Can optionally be linked to a specific course."""
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    title: str = Field(default="New Chat")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    last_message: datetime = Field(default_factory=datetime.utcnow)
+    course: Optional[str] = Field(default=None, foreign_key="courseconfig.folder_name")
+
+    messages: list["ChatMessage"] = Relationship(
+        back_populates="session",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    )
+
+
+class ChatMessageImage(SQLModel, table=True):
+    """Stores raw bytes for pasted images"""
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    message_id: UUID = Field(foreign_key="chatmessage.id", index=True)
+    image_data: bytes
+
+    message: "ChatMessage" = Relationship(back_populates="images")
+
+
+class ChatMessage(SQLModel, table=True):
+    """Individual messages in a session."""
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    session_id: UUID = Field(foreign_key="chatsession.id", index=True)
+
+    role: str = Field(description="'user' or 'model'")
+    content: str = Field(description="The raw text of the message")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    session: ChatSession = Relationship(back_populates="messages")
+    images: list[ChatMessageImage] = Relationship(
+        back_populates="message",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    )

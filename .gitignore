@@ -1,0 +1,28 @@
+turri-agentic-ecommerce
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+.env
+# Virtual environments
+.venv
+uv.lock
+postgres-data
+redis-data
+adk_info.txt_files/
+*.pdf
+mono-repo-server-key.json

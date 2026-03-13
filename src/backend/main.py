@@ -9,6 +9,7 @@ from loguru import logger
 from src.backend.config import ApiConfig
 from src.backend.database.db import DataBase
 from src.backend.routers.anki import anki_router
+from src.backend.routers.courses import courses
 from src.backend.routers.files import file_router
 from src.backend.routers.llm import chat_router
 from src.backend.llm import load_agent
@@ -46,6 +47,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(anki_router)
+app.include_router(courses)
 app.include_router(file_router)
 app.include_router(chat_router)
 

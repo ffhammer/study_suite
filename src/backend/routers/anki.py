@@ -1,5 +1,5 @@
 from datetime import date, datetime, timedelta
-from uuid import uuid4
+from uuid import uuid4, UUID
 
 from fastapi import APIRouter, HTTPException, Request
 
@@ -66,7 +66,7 @@ async def save_all(cards: list[SimpleAnkiCard], request: Request):
 
 
 @anki_router.put("/api/anki/{card_id}/review")
-async def review_card(card_id: int, quality: float, request: Request):
+async def review_card(card_id: UUID, quality: int, request: Request):
     if quality < 0 or quality > 5:
         raise HTTPException(400, detail=f"{quality} is invalid val")
 
@@ -86,3 +86,15 @@ async def review_card(card_id: int, quality: float, request: Request):
 async def update_card(card: AnkiCard, request: Request):
     db: DataBase = request.app.state.db
     await db.save(card)
+
+
+@anki_router.delete("/api/anki/{card_id}")
+async def delete_card(card_id: UUID, request: Request):
+    db: DataBase = request.app.state.db
+    card = await db.query_table(
+        AnkiCard, where_clauses=[AnkiCard.id == card_id], mode="first"
+    )
+    if card is None:
+        raise HTTPException(404, detail="Card not found")
+    await db.delete(card)
+    return {"status": "success"}

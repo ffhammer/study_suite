@@ -1,11 +1,12 @@
 from typing import Literal, Type
 
 from loguru import logger
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel, select
-from .models import *  # noqa: F401
+
 from ..config import ApiConfig
-from sqlalchemy import event
+from .models import *  # noqa: F401
 
 
 class DataBase:
@@ -101,3 +102,22 @@ class DataBase:
             if mode == "first":
                 return result.scalars().first()
             return list(result.scalars().all())
+
+    async def delete(self, obj: SQLModel) -> None:
+        """
+        Deletes the given object from the database if it exists.
+        """
+        async with self.session_maker() as sess:
+            merged = await sess.merge(obj)
+            await sess.delete(merged)
+            await sess.commit()
+
+    async def delete_all(self, objs: list[SQLModel]) -> None:
+        """
+        Deletes all given objects from the database if they exist.
+        """
+        async with self.session_maker() as sess:
+            for obj in objs:
+                merged = await sess.merge(obj)
+                await sess.delete(merged)
+            await sess.commit()

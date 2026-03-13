@@ -1,0 +1,256 @@
+import mimetypes
+import shutil
+import tempfile
+from datetime import datetime
+from pathlib import Path
+
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse
+from loguru import logger
+
+from src.backend.config import ApiConfig
+from src.backend.database.db import DataBase
+from src.backend.database.models import ResourceMeta, TextUpdate
+
+file_router = APIRouter(prefix="/files", tags=["files"])
+
+
+@file_router.get("/raw/{course_name}/{rel_path:path}")
+async def get_raw_file(course_name: str, rel_path: str, request: Request):
+    config: ApiConfig = request.app.state.config
+
+    file_path = config.save_join_file_path(course_name, rel_path)
+
+    if not file_path.exists() or not file_path.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    # Guess the media type (e.g., 'video/mp4' or 'audio/mpeg')
+    mime_type, _ = mimetypes.guess_type(file_path)
+
+    return FileResponse(
+        path=file_path,
+        media_type=mime_type or "application/octet-stream",
+        filename=file_path.name,
+    )
+
+
+@file_router.get("/meta/{course_name}/{rel_path:path}")
+async def get_meta(course_name, rel_path: str, request: Request) -> ResourceMeta:
+    """Returns Resource Meta. If not exist -> UUID is None"""
+    db: DataBase = request.app.state.db
+    config: ApiConfig = request.app.state.config
+
+    meta = db.query_table(
+        ResourceMeta,
+        where_clauses=[
+            ResourceMeta.course == course_name,
+            ResourceMeta.relative_path == rel_path,
+        ],
+        mode="first",
+    ) or ResourceMeta(
+        course=course_name,
+        relative_path=rel_path,
+    )
+
+    item_path = config.save_join_file_path(course_name, rel_path)
+    if not item_path.exists() or not item_path.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    # include metadata
+    stat = item_path.stat()
+    meta.last_processed = datetime.fromtimestamp(stat.st_mtime)
+    meta.size = stat.st_size
+    return meta
+
+
+@file_router.get("/meta/edit-transcriped-text/{course_name}/{rel_path:path}")
+async def edit_transcribed_text(
+    course_name, rel_path: str, new_text: str, request: Request
+) -> ResourceMeta:
+    """Returns Resource Meta. If not exist -> UUID is None"""
+    db: DataBase = request.app.state.db
+
+    meta: ResourceMeta = db.query_table(
+        ResourceMeta,
+        where_clauses=[
+            ResourceMeta.course == course_name,
+            ResourceMeta.relative_path == rel_path,
+        ],
+        mode="first",
+    )
+
+    if meta is None:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    meta.transcript_text = new_text
+    await db.save(meta)
+
+
+@file_router.delete("/del/{course_name}/{rel_path:path}")
+async def delete_file_or_folder(course_name: str, rel_path: str, request: Request):
+    db: DataBase = request.app.state.db
+    config: ApiConfig = request.app.state.config
+
+    item_path = config.save_join_file_path(course_name, rel_path)
+    if not item_path.exists():
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    # 1. Identify Database Records to delete
+    # We fetch only the ones starting with this path
+    all_meta = await db.query_table(
+        ResourceMeta,
+        where_clauses=[
+            ResourceMeta.course == course_name,
+            ResourceMeta.relative_path.like(f"{rel_path}%"),
+        ],
+        mode="all",
+    )
+
+    # 2. Setup a temporary "Backup" location
+    # We move it here so we can restore it if the DB fails
+    temp_dir = Path(tempfile.gettempdir()) / "vault_trash"
+    temp_dir.mkdir(exist_ok=True)
+    backup_path = temp_dir / f"{course_name}_{Path(rel_path).name}"
+
+    try:
+        # 3. Physical Move (Reversible)
+        shutil.move(str(item_path), str(backup_path))
+
+        try:
+            # 4. Database Delete
+            if all_meta:
+                await db.delete_all(all_meta)
+
+            # If we got here, everything worked.
+            # We can now permanently delete the backup or let the OS clean temp.
+            if backup_path.is_dir():
+                shutil.rmtree(backup_path)
+            else:
+                backup_path.unlink()
+
+        except Exception as db_error:
+            # ROLLBACK: Move the file back where it was!
+            shutil.move(str(backup_path), str(item_path))
+            logger.error(f"DB error, restored file: {db_error}")
+            raise HTTPException(
+                status_code=500, detail="Database error. File restored."
+            )
+
+    except Exception as fs_error:
+        logger.error(f"Filesystem error: {fs_error}")
+        raise HTTPException(status_code=500, detail="Could not move file to trash.")
+
+    return {"detail": "Deleted successfully"}
+
+
+@file_router.get("/text-content/{course_name}/{rel_path:path}")
+async def get_text_content(course_name: str, rel_path: str, request: Request):
+    """Reads a file from disk and returns it as a string for the editor."""
+    config: ApiConfig = request.app.state.config
+    file_path = config.save_join_file_path(course_name, rel_path)
+
+    if not file_path.exists() or not file_path.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    # Sanity check: Don't try to read a 1GB video file as text
+    if file_path.stat().st_size > 5 * 1024 * 1024:  # 5MB limit
+        raise HTTPException(status_code=400, detail="File too large for text editor")
+
+    try:
+        content = file_path.read_text(encoding="utf-8")
+        return {"content": content}
+    except UnicodeDecodeError:
+        raise HTTPException(status_code=400, detail="File is not a valid text file")
+
+
+@file_router.put("/text-update/{course_name}/{rel_path:path}")
+async def update_text_file(
+    course_name: str, rel_path: str, data: TextUpdate, request: Request
+):
+    """Overwrites a text file on disk with new content."""
+    db: DataBase = request.app.state.db
+    config: ApiConfig = request.app.state.config
+    file_path = config.save_join_file_path(course_name, rel_path)
+
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    try:
+        # 1. Write to disk
+        file_path.write_text(data.content, encoding="utf-8")
+
+        # 2. Update Metadata in DB so the UI stays in sync
+        meta = await db.query_table(
+            ResourceMeta,
+            where_clauses=[
+                ResourceMeta.course == course_name,
+                ResourceMeta.relative_path == rel_path,
+            ],
+            mode="first",
+        )
+
+        if meta:
+            stat = file_path.stat()
+            meta.size = stat.st_size
+            # This marks when the file itself was last touched
+            meta.last_modified_disk = datetime.fromtimestamp(stat.st_mtime)
+            await db.save(meta)
+
+        return {"status": "success", "last_modified": datetime.now()}
+
+    except Exception as e:
+        logger.error(f"Failed to save text file: {e}")
+        raise HTTPException(status_code=500, detail="Failed to write file to disk")
+
+
+@file_router.post("/upload/{course_name}")
+async def upload_file(
+    course_name: str,
+    request: Request,
+    file: UploadFile = File(...),
+    target_rel_path: str = Form(None),  # Optional: "folder/new_name.mp4"
+):
+    db: DataBase = request.app.state.db
+    config: ApiConfig = request.app.state.config
+
+    # 1. Determine the final path
+    # If no target_rel_path is sent, use the original filename
+    final_rel_path = target_rel_path or file.filename
+
+    # Use your safety helper
+    file_path = config.save_join_file_path(course_name, final_rel_path)
+
+    # 2. Ensure parent directories exist (e.g., if target is "Lectures/New/vid.mp4")
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        # 3. Stream the file to disk
+        # We use a buffer to handle large files without eating RAM
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        # 4. Create/Update Metadata
+        stat = file_path.stat()
+        meta = await db.query_table(
+            ResourceMeta,
+            where_clauses=[
+                ResourceMeta.course == course_name,
+                ResourceMeta.relative_path == final_rel_path,
+            ],
+            mode="first",
+        ) or ResourceMeta(course=course_name, relative_path=final_rel_path)
+
+        meta.size = stat.st_size
+        meta.last_modified_disk = datetime.fromtimestamp(stat.st_mtime)
+
+        await db.save(meta)
+
+        return {"filename": final_rel_path, "size": meta.size, "status": "uploaded"}
+
+    except Exception as e:
+        logger.error(f"Upload failed: {e}")
+        if file_path.exists():
+            file_path.unlink()
+        raise HTTPException(status_code=500, detail="Write failed")
+    finally:
+        await file.close()

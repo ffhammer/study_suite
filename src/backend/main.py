@@ -1,17 +1,13 @@
-import asyncio
-from fastapi import FastAPI
+import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
-from loguru import logger
-from src.backend.database.db import DataBase
-from src.backend.config import ApiConfig
-from src.backend.routers.anki import anki_router
-import os
-
 from dotenv import load_dotenv
+from fastapi import FastAPI, Request
+from loguru import logger
+
+from src.backend.config import ApiConfig
+from src.backend.database.db import DataBase
+from src.backend.routers.anki import anki_router
 
 
 @asynccontextmanager

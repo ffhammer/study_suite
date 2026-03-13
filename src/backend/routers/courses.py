@@ -1,12 +1,13 @@
+import shutil
+from datetime import datetime
+from pathlib import Path
+
 from fastapi import APIRouter, HTTPException, Request
+from loguru import logger
 
 from src.backend.config import ApiConfig
 from src.backend.database.db import DataBase
 from src.backend.database.models import CourseConfig, ResourceMeta
-from pathlib import Path
-from loguru import logger
-import shutil
-from datetime import datetime
 
 courses = APIRouter(prefix="/courses", tags=["courses"])
 
@@ -30,7 +31,6 @@ async def list_courses(request: Request) -> list[CourseConfig]:
 
 @courses.put("/rename")
 async def rename_course(course_name: str, new_name: str, request: Request):
-
     db: DataBase = request.app.state.db
     config: ApiConfig = request.app.state.config
     course: CourseConfig = await db.query_table(
@@ -107,7 +107,7 @@ async def create_course(course_name: str, request: Request):
     await db.save(CourseConfig(folder_name=course_name, is_active=True))
 
 
-@courses.get("/course/{course_name}/toggle-activity")
+@courses.get("/course/{course_name}/tree")
 async def course_tree(course_name, request: Request) -> list[ResourceMeta]:
     """Returns Folder Tree as a simple flat list, the UI can make a tree out of it easily based on real path"""
     db: DataBase = request.app.state.db

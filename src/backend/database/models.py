@@ -1,8 +1,9 @@
-from sqlmodel import SQLModel, Field, ForeignKey, Column, String
-from typing import Optional
 from datetime import date, datetime
+from typing import Optional
 from uuid import UUID
+
 from pydantic import BaseModel
+from sqlmodel import Column, Field, ForeignKey, SQLModel, String
 
 
 class CourseConfig(SQLModel, table=True):
@@ -62,3 +63,7 @@ class SimpleAnkiCard(BaseModel):
     )
     is_question: bool = False
     course: str
+
+
+class TextUpdate(BaseModel):
+    content: str

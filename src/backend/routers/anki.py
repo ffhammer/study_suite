@@ -1,11 +1,10 @@
-from datetime import datetime
+from datetime import date, datetime, timedelta
+from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request
 
 from src.backend.database.db import DataBase
-from src.backend.database.models import AnkiCard, SimpleAnkiCard, CourseConfig
-from datetime import date, timedelta
-from uuid import uuid4
+from src.backend.database.models import AnkiCard, CourseConfig, SimpleAnkiCard
 
 anki_router = APIRouter(prefix="/anki", tags=["anki"])
 
@@ -59,7 +58,7 @@ async def save_all(cards: list[SimpleAnkiCard], request: Request):
     courses = {i.folder_name for i in await db.query_table(CourseConfig)}
     for card in cards:
         if card.course not in courses:
-            raise HTTPException(404, f"Course {card.course } does not exist")
+            raise HTTPException(404, f"Course {card.course} does not exist")
 
     cards = [AnkiCard(**card.model_dump(), id=uuid4()) for card in cards]
 
@@ -85,6 +84,5 @@ async def review_card(card_id: int, quality: float, request: Request):
 
 @anki_router.put("/api/anki")
 async def update_card(card: AnkiCard, request: Request):
-
     db: DataBase = request.app.state.db
     await db.save(card)

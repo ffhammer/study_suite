@@ -1,6 +1,16 @@
 "use client";
 
-import { ChevronDown, Search, PanelRight, MessageSquare, GraduationCap, Plus, SplitSquareHorizontal } from "lucide-react";
+import {
+  ChevronDown,
+  Search,
+  PanelRight,
+  MessageSquare,
+  GraduationCap,
+  Plus,
+  SplitSquareHorizontal,
+  Maximize2,
+  Minimize2,
+} from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,6 +32,8 @@ interface TopNavbarProps {
   splitScreen?: boolean;
   onCreateFile?: () => void;
   onToggleSplit?: () => void;
+  isFocusMode?: boolean;
+  onToggleFocusMode?: () => void;
   currentView: "overview" | "courses" | "anki";
   onViewChange: (view: "overview" | "courses" | "anki") => void;
 }
@@ -37,6 +49,8 @@ export function TopNavbar({
   splitScreen = false,
   onCreateFile,
   onToggleSplit,
+  isFocusMode = false,
+  onToggleFocusMode,
   currentView,
   onViewChange,
 }: TopNavbarProps) {
@@ -139,6 +153,16 @@ export function TopNavbar({
       </div>
 
       <div className="ml-auto flex items-center gap-3">
+        <button
+          type="button"
+          className="h-7 px-2 rounded-md inline-flex items-center gap-1.5 text-xs text-muted-foreground/80 hover:text-foreground hover:bg-muted/30 transition-colors"
+          onClick={onToggleFocusMode}
+          title="Toggle focus mode"
+        >
+          {isFocusMode ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+          <span>{isFocusMode ? "Exit Focus" : "Focus"}</span>
+          <Kbd>Shift+F</Kbd>
+        </button>
         {currentView === "courses" && (
           <>
             <button

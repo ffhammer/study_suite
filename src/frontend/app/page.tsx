@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { Maximize2, Minimize2 } from "lucide-react";
 import {
   ResizablePanelGroup,
   ResizablePanel,
@@ -47,6 +48,23 @@ export default function StudySuite() {
   const [secondaryOpenFileName, setSecondaryOpenFileName] = useState<string | null>(null);
   const [splitScreen, setSplitScreen] = useState(false);
   const [summaryEditProposal, setSummaryEditProposal] = useState<SummaryEditProposal | null>(null);
+  const [focusMode, setFocusMode] = useState(false);
+  const [isBrowserFullscreen, setIsBrowserFullscreen] = useState(false);
+
+  const toggleFocusMode = useCallback(async () => {
+    const next = !focusMode;
+    setFocusMode(next);
+
+    try {
+      if (next && !document.fullscreenElement) {
+        await document.documentElement.requestFullscreen();
+      } else if (!next && document.fullscreenElement) {
+        await document.exitFullscreen();
+      }
+    } catch {
+      // Ignore fullscreen API failures from browser policy.
+    }
+  }, [focusMode]);
 
   const refreshTree = useCallback(async () => {
     if (!selectedCourse) {
@@ -81,6 +99,19 @@ export default function StudySuite() {
     setAiContextPaths((prev) => (prev.includes(activeFilePath) ? prev : [activeFilePath, ...prev]));
   }, [showChat, activeFilePath]);
 
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      const active = Boolean(document.fullscreenElement);
+      setIsBrowserFullscreen(active);
+      if (!active) {
+        setFocusMode(false);
+      }
+    };
+
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
+  }, []);
+
   // Keyboard shortcuts
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     // Check for Cmd/Ctrl key
@@ -110,7 +141,20 @@ export default function StudySuite() {
       e.preventDefault();
       setShowChat((prev) => !prev);
     }
-  }, []);
+
+    if (isMod && e.shiftKey && e.key.toLowerCase() === "f") {
+      e.preventDefault();
+      toggleFocusMode().catch(() => undefined);
+    }
+
+    if (e.key === "Escape" && focusMode) {
+      e.preventDefault();
+      setFocusMode(false);
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => undefined);
+      }
+    }
+  }, [focusMode, toggleFocusMode]);
 
   useEffect(() => {
     window.addEventListener("keydown", handleKeyDown);
@@ -145,22 +189,45 @@ export default function StudySuite() {
   return (
     <div className="h-screen flex flex-col bg-background text-foreground overflow-hidden">
       {/* Top Navigation */}
-      <TopNavbar
-        currentCourse={selectedCourse}
-        courses={courses}
-        coursesLoading={coursesLoading}
-        onCourseChange={setSelectedCourse}
-        onCreateCourse={() => {
-          handleCreateCourse().catch(() => undefined);
-        }}
-        primaryOpenFileName={primaryOpenFileName}
-        secondaryOpenFileName={secondaryOpenFileName}
-        splitScreen={splitScreen}
-        onCreateFile={() => setCreateFileTrigger((prev) => prev + 1)}
-        onToggleSplit={() => setToggleSplitTrigger((prev) => prev + 1)}
-        currentView={currentView}
-        onViewChange={setCurrentView}
-      />
+      {!focusMode && (
+        <TopNavbar
+          currentCourse={selectedCourse}
+          courses={courses}
+          coursesLoading={coursesLoading}
+          onCourseChange={setSelectedCourse}
+          onCreateCourse={() => {
+            handleCreateCourse().catch(() => undefined);
+          }}
+          primaryOpenFileName={primaryOpenFileName}
+          secondaryOpenFileName={secondaryOpenFileName}
+          splitScreen={splitScreen}
+          onCreateFile={() => setCreateFileTrigger((prev) => prev + 1)}
+          onToggleSplit={() => setToggleSplitTrigger((prev) => prev + 1)}
+          isFocusMode={focusMode}
+          onToggleFocusMode={() => {
+            toggleFocusMode().catch(() => undefined);
+          }}
+          currentView={currentView}
+          onViewChange={setCurrentView}
+        />
+      )}
+
+      {focusMode && (
+        <button
+          type="button"
+          className="fixed top-3 right-3 z-50 h-8 px-2 rounded-md border border-border bg-background/90 backdrop-blur text-xs inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground"
+          onClick={() => {
+            setFocusMode(false);
+            if (document.fullscreenElement) {
+              document.exitFullscreen().catch(() => undefined);
+            }
+          }}
+          title="Exit focus mode"
+        >
+          {isBrowserFullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+          Exit Focus
+        </button>
+      )}
 
       {/* Main Content */}
       <div className="flex-1 min-h-0">

@@ -1,0 +1,15 @@
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir \
+    python-telegram-bot>=22.0 \
+    httpx>=0.28.1 \
+    loguru>=0.7.3
+
+COPY src/telegram-bot ./src/telegram-bot
+
+CMD ["python", "src/telegram-bot/main.py"]

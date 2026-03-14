@@ -25,3 +25,19 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
+
+  telegram-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile.telegram
+    container_name: study-suite-telegram-bot
+    environment:
+      BACKEND_BASE_URL: http://backend:8000
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_ALLOWED_CHAT_IDS: ${TELEGRAM_ALLOWED_CHAT_IDS:-}
+      TELEGRAM_ALLOWED_USERNAMES: ${TELEGRAM_ALLOWED_USERNAMES:-}
+      TELEGRAM_BACKEND_API_KEY: ${TELEGRAM_BACKEND_API_KEY:-}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      - backend
+    restart: unless-stopped

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Maximize2, Minimize2 } from "lucide-react";
 import {
   ResizablePanelGroup,
   ResizablePanel,
@@ -49,7 +48,6 @@ export default function StudySuite() {
   const [splitScreen, setSplitScreen] = useState(false);
   const [summaryEditProposal, setSummaryEditProposal] = useState<SummaryEditProposal | null>(null);
   const [focusMode, setFocusMode] = useState(false);
-  const [isBrowserFullscreen, setIsBrowserFullscreen] = useState(false);
 
   const toggleFocusMode = useCallback(async () => {
     const next = !focusMode;
@@ -102,7 +100,6 @@ export default function StudySuite() {
   useEffect(() => {
     const onFullscreenChange = () => {
       const active = Boolean(document.fullscreenElement);
-      setIsBrowserFullscreen(active);
       if (!active) {
         setFocusMode(false);
       }
@@ -142,7 +139,7 @@ export default function StudySuite() {
       setShowChat((prev) => !prev);
     }
 
-    if (isMod && e.shiftKey && e.key.toLowerCase() === "f") {
+    if (isMod && e.key.toLowerCase() === "k") {
       e.preventDefault();
       toggleFocusMode().catch(() => undefined);
     }
@@ -189,45 +186,26 @@ export default function StudySuite() {
   return (
     <div className="h-screen flex flex-col bg-background text-foreground overflow-hidden">
       {/* Top Navigation */}
-      {!focusMode && (
-        <TopNavbar
-          currentCourse={selectedCourse}
-          courses={courses}
-          coursesLoading={coursesLoading}
-          onCourseChange={setSelectedCourse}
-          onCreateCourse={() => {
-            handleCreateCourse().catch(() => undefined);
-          }}
-          primaryOpenFileName={primaryOpenFileName}
-          secondaryOpenFileName={secondaryOpenFileName}
-          splitScreen={splitScreen}
-          onCreateFile={() => setCreateFileTrigger((prev) => prev + 1)}
-          onToggleSplit={() => setToggleSplitTrigger((prev) => prev + 1)}
-          isFocusMode={focusMode}
-          onToggleFocusMode={() => {
-            toggleFocusMode().catch(() => undefined);
-          }}
-          currentView={currentView}
-          onViewChange={setCurrentView}
-        />
-      )}
-
-      {focusMode && (
-        <button
-          type="button"
-          className="fixed top-3 right-3 z-50 h-8 px-2 rounded-md border border-border bg-background/90 backdrop-blur text-xs inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground"
-          onClick={() => {
-            setFocusMode(false);
-            if (document.fullscreenElement) {
-              document.exitFullscreen().catch(() => undefined);
-            }
-          }}
-          title="Exit focus mode"
-        >
-          {isBrowserFullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
-          Exit Focus
-        </button>
-      )}
+      <TopNavbar
+        currentCourse={selectedCourse}
+        courses={courses}
+        coursesLoading={coursesLoading}
+        onCourseChange={setSelectedCourse}
+        onCreateCourse={() => {
+          handleCreateCourse().catch(() => undefined);
+        }}
+        primaryOpenFileName={primaryOpenFileName}
+        secondaryOpenFileName={secondaryOpenFileName}
+        splitScreen={splitScreen}
+        onCreateFile={() => setCreateFileTrigger((prev) => prev + 1)}
+        onToggleSplit={() => setToggleSplitTrigger((prev) => prev + 1)}
+        isFocusMode={focusMode}
+        onToggleFocusMode={() => {
+          toggleFocusMode().catch(() => undefined);
+        }}
+        currentView={currentView}
+        onViewChange={setCurrentView}
+      />
 
       {/* Main Content */}
       <div className="flex-1 min-h-0">

@@ -157,11 +157,11 @@ export function TopNavbar({
           type="button"
           className="h-7 px-2 rounded-md inline-flex items-center gap-1.5 text-xs text-muted-foreground/80 hover:text-foreground hover:bg-muted/30 transition-colors"
           onClick={onToggleFocusMode}
-          title="Toggle focus mode"
+          title="Toggle browser fullscreen"
         >
           {isFocusMode ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
           <span>{isFocusMode ? "Exit Focus" : "Focus"}</span>
-          <Kbd>Shift+F</Kbd>
+          <Kbd>K</Kbd>
         </button>
         {currentView === "courses" && (
           <>

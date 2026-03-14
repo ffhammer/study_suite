@@ -12,6 +12,7 @@ import {
   FilePlus2,
   FolderPlus,
   Download,
+  Image as ImageIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { WorkspaceFileItem, formatBytes } from "@/lib/file-tree";
@@ -38,6 +39,8 @@ function FileIcon({ type }: { type: WorkspaceFileItem["type"] }) {
       return <Folder className="h-4 w-4 text-muted-foreground" />;
     case "media":
       return <Video className="h-4 w-4 text-blue-400" />;
+    case "image":
+      return <ImageIcon className="h-4 w-4 text-emerald-400" />;
     case "pdf":
       return <FileText className="h-4 w-4 text-red-400" />;
     case "binary":

@@ -6,7 +6,13 @@ export interface TranscriptSegment {
   text: string;
 }
 
-export type WorkspaceFileType = "folder" | "file" | "media" | "pdf" | "binary";
+export type WorkspaceFileType =
+  | "folder"
+  | "file"
+  | "media"
+  | "image"
+  | "pdf"
+  | "binary";
 
 export interface WorkspaceFileItem {
   id: string;
@@ -32,6 +38,17 @@ const mediaExtensions = new Set([
   ".mkv",
   ".webm",
   ".avi",
+]);
+
+const imageExtensions = new Set([
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".webp",
+  ".gif",
+  ".bmp",
+  ".tif",
+  ".tiff",
 ]);
 
 const textExtensions = new Set([
@@ -71,6 +88,7 @@ const textExtensions = new Set([
 function detectFileType(fileName: string): WorkspaceFileType {
   const dotIndex = fileName.lastIndexOf(".");
   const ext = dotIndex >= 0 ? fileName.slice(dotIndex).toLowerCase() : "";
+  if (imageExtensions.has(ext)) return "image";
   if (mediaExtensions.has(ext)) return "media";
   if (ext === ".pdf") return "pdf";
   if (textExtensions.has(ext) || ext === "") return "file";

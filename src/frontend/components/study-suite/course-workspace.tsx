@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/resizable";
 import { FileExplorer } from "./file-explorer";
 import { MediaPlayer } from "./media-player";
+import { ImageEditor } from "./image-editor";
 import { MarkdownEditor } from "./markdown-editor";
 import { PdfViewer } from "./pdf-viewer";
 import { SummaryDiffEditor } from "./summary-diff-editor";
@@ -245,7 +246,7 @@ export function CourseWorkspace({
 
   const handleFileSelect = (file: WorkspaceFileItem, panel: "primary" | "secondary" = "primary") => {
     if (file.type === "folder") return;
-    
+
     if (panel === "secondary") {
       setSecondaryFile(file);
     } else {
@@ -303,10 +304,10 @@ export function CourseWorkspace({
       setSummaryEditState((prev) =>
         prev
           ? {
-              ...prev,
-              originalContent: prev.draftContent,
-              existsInTree: true,
-            }
+            ...prev,
+            originalContent: prev.draftContent,
+            existsInTree: true,
+          }
           : prev
       );
 
@@ -339,6 +340,31 @@ export function CourseWorkspace({
       toast({
         title: "Transcript save failed",
         description: error instanceof Error ? error.message : "Could not save transcript.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleSaveEditedImage = async (
+    file: WorkspaceFileItem,
+    blob: Blob,
+    mimeType: string
+  ) => {
+    if (!selectedCourse || !file.relativePath) return;
+
+    try {
+      const editedFile = new File([blob], file.name, { type: mimeType });
+      await api.uploadFile(selectedCourse, editedFile, file.relativePath);
+      toast({
+        title: "Image saved",
+        description: `${file.name} was updated successfully.`,
+      });
+      onRefreshFiles?.();
+    } catch (error) {
+      toast({
+        title: "Image save failed",
+        description:
+          error instanceof Error ? error.message : "Could not save image.",
         variant: "destructive",
       });
     }
@@ -479,6 +505,18 @@ export function CourseWorkspace({
       );
     }
 
+    if (file.type === "image") {
+      return (
+        <ImageEditor
+          file={file}
+          sourceUrl={api.getRawFileUrl(selectedCourse, file.relativePath)}
+          onSaveEditedImage={(blob, mimeType) =>
+            handleSaveEditedImage(file, blob, mimeType)
+          }
+        />
+      );
+    }
+
     if (file.type === "pdf") {
       return (
         <PdfViewer
@@ -510,9 +548,9 @@ export function CourseWorkspace({
             setSummaryEditState((prev) =>
               prev
                 ? {
-                    ...prev,
-                    draftContent: value,
-                  }
+                  ...prev,
+                  draftContent: value,
+                }
                 : prev
             )
           }
@@ -543,9 +581,9 @@ export function CourseWorkspace({
             setSummaryEditState((prev) =>
               prev
                 ? {
-                    ...prev,
-                    draftContent: value,
-                  }
+                  ...prev,
+                  draftContent: value,
+                }
                 : prev
             )
           }
@@ -595,57 +633,57 @@ export function CourseWorkspace({
                       )}
                     </div>
                     <div className="flex items-center gap-1">
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <button
-                                type="button"
-                                className="h-5 w-5 inline-flex items-center justify-center rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                                title="Open file in secondary panel"
-                              >
-                                <FilePlus2 className="h-3 w-3" />
-                              </button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-64 p-0" align="end">
-                              <div className="p-2 border-b border-border bg-muted/30">
-                                <p className="text-[10px] font-medium uppercase text-muted-foreground">Select file for Right Panel</p>
-                              </div>
-                              <ScrollArea className="h-72">
-                                <div className="p-1">
-                                  {flatFiles
-                                    .filter(item => item.file.type !== "folder")
-                                    .map(({ file, path }) => (
-                                      <button
-                                        key={file.id}
-                                        className="w-full text-left px-2 py-1.5 text-xs rounded-sm hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
-                                        onClick={() => {
-                                          handleFileSelect(file, "secondary");
-                                        }}
-                                      >
-                                        <FileText className="h-3 w-3 shrink-0 opacity-70" />
-                                        <span className="truncate">{path}</span>
-                                      </button>
-                                    ))}
-                                </div>
-                              </ScrollArea>
-                            </PopoverContent>
-                          </Popover>
+                      <Popover>
+                        <PopoverTrigger asChild>
                           <button
                             type="button"
                             className="h-5 w-5 inline-flex items-center justify-center rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                            onClick={() => setSplitScreen(false)}
-                            title="Close split view"
+                            title="Open file in secondary panel"
                           >
-                            <X className="h-3 w-3" />
+                            <FilePlus2 className="h-3 w-3" />
                           </button>
-                        </div>
-                      </div>
-                      <div className="flex-1 min-h-0">{renderFileContent(secondaryFile)}</div>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-64 p-0" align="end">
+                          <div className="p-2 border-b border-border bg-muted/30">
+                            <p className="text-[10px] font-medium uppercase text-muted-foreground">Select file for Right Panel</p>
+                          </div>
+                          <ScrollArea className="h-72">
+                            <div className="p-1">
+                              {flatFiles
+                                .filter(item => item.file.type !== "folder")
+                                .map(({ file, path }) => (
+                                  <button
+                                    key={file.id}
+                                    className="w-full text-left px-2 py-1.5 text-xs rounded-sm hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                                    onClick={() => {
+                                      handleFileSelect(file, "secondary");
+                                    }}
+                                  >
+                                    <FileText className="h-3 w-3 shrink-0 opacity-70" />
+                                    <span className="truncate">{path}</span>
+                                  </button>
+                                ))}
+                            </div>
+                          </ScrollArea>
+                        </PopoverContent>
+                      </Popover>
+                      <button
+                        type="button"
+                        className="h-5 w-5 inline-flex items-center justify-center rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                        onClick={() => setSplitScreen(false)}
+                        title="Close split view"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
                     </div>
-                  </ResizablePanel>
-                </ResizablePanelGroup>
-              ) : (
-                renderPrimaryContent()
-              )}
+                  </div>
+                  <div className="flex-1 min-h-0">{renderFileContent(secondaryFile)}</div>
+                </div>
+              </ResizablePanel>
+            </ResizablePanelGroup>
+          ) : (
+            renderPrimaryContent()
+          )}
         </div>
       </ResizablePanel>
     </ResizablePanelGroup>

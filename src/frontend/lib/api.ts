@@ -1,8 +1,19 @@
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  (typeof window !== "undefined"
-    ? `${window.location.protocol}//${window.location.hostname}:8000`
-    : "http://localhost:8000");
+function resolveApiBaseUrl(): string {
+  if (process.env.NEXT_PUBLIC_API_BASE_URL) {
+    return process.env.NEXT_PUBLIC_API_BASE_URL;
+  }
+
+  if (typeof window === "undefined") {
+    return "http://127.0.0.1:8000";
+  }
+
+  const protocol = window.location.protocol;
+  const host = window.location.hostname;
+  const fallbackHost = host === "0.0.0.0" || host === "::" ? "127.0.0.1" : host;
+  return `${protocol}//${fallbackHost}:8000`;
+}
+
+const API_BASE_URL = resolveApiBaseUrl();
 
 export interface CourseConfig {
   folder_name: string;
@@ -63,14 +74,21 @@ export interface AnkiCard {
 }
 
 async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers || {}),
-    },
-    cache: "no-store",
-  });
+  const url = `${API_BASE_URL}${path}`;
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        ...(init?.headers || {}),
+      },
+      cache: "no-store",
+    });
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "Unknown network error";
+    throw new Error(`Network request failed for ${url}: ${reason}`);
+  }
 
   if (!response.ok) {
     const text = await response.text();

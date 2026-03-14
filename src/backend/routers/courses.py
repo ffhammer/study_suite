@@ -111,8 +111,17 @@ async def create_course(course_name: str, request: Request):
     if course is not None or path.exists():
         raise HTTPException(status_code=409, detail="Course already exists")
 
-    path.mkdir(parents=True)
-    await db.save(CourseConfig(folder_name=course_name, is_active=True))
+    created_on_disk = False
+    try:
+        path.mkdir(parents=True)
+        created_on_disk = True
+        await db.save(CourseConfig(folder_name=course_name, is_active=True))
+    except Exception as e:
+        logger.exception("create course failed for {}: {}", course_name, e)
+        if created_on_disk and path.exists():
+            shutil.rmtree(path, ignore_errors=True)
+        raise HTTPException(status_code=500, detail="Could not create course")
+
     logger.info("course created: {}", course_name)
 
 

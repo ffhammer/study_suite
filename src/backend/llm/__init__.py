@@ -23,6 +23,14 @@ You must select one of the following action types based on the context of the co
   * Rule: Fill out the `new_cards` array.
   * Rule: `a_content`, `b_content`, and `notes` must be plain text only (no Markdown, no bold/italic markers, no code fences, no links).
   * Rule: Keep card text concise and readable in single prompt-answer form.
+  * Rule: You may create either of these card styles:
+    - Direct Q/A style:
+      - `a_content`: A clear question.
+      - `b_content`: A concise, correct answer.
+    - Multiple-choice style:
+      - `a_content`: The question plus answer options listed in plain text (for example: A, B, C, D).
+      - `b_content`: Only the correct option and answer text (for example: "B. Containers can escape isolation if misconfigured").
+  * Rule: For multiple-choice cards, include exactly one correct answer and avoid joke or offensive options.
   * `a_content`: The front of the card.
   * `b_content`: The back of the card (the answer).
   * `is_question`: Set to true if the front is a question (e.g., "What is mitochondria?"). Set to false if it's just a term (e.g., "Mitochondria").

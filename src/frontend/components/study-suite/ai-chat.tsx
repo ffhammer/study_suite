@@ -50,6 +50,13 @@ interface PendingAnkiCard extends GeneratedAnkiCard {
   selected: boolean;
 }
 
+function makeClientId(): string {
+  if (typeof globalThis !== "undefined" && globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID();
+  }
+  return `id-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 function cleanAnkiText(value: string) {
   let text = value || "";
   text = text.replace(/\r\n/g, "\n");
@@ -194,7 +201,7 @@ export function AIChat({
     if (!input.trim() || !selectedCourse || isSending) return;
 
     const userMessage: ChatMessage = {
-      id: crypto.randomUUID(),
+      id: makeClientId(),
       role: "user",
       content: input,
       timestamp: new Date().toLocaleTimeString(),
@@ -233,7 +240,7 @@ export function AIChat({
 
       if (response.actions.action_type === "NewAnkiCards") {
         const proposed = (response.actions.new_cards || []).map((card) => ({
-          id: crypto.randomUUID(),
+          id: makeClientId(),
           selected: true,
           a_content: cleanAnkiText(card.a_content),
           b_content: cleanAnkiText(card.b_content),
@@ -512,9 +519,9 @@ export function AIChat({
                             prev.map((item) =>
                               item.id === card.id
                                 ? {
-                                    ...item,
-                                    selected: event.target.checked,
-                                  }
+                                  ...item,
+                                  selected: event.target.checked,
+                                }
                                 : item
                             )
                           )
@@ -547,9 +554,9 @@ export function AIChat({
                             prev.map((item) =>
                               item.id === card.id
                                 ? {
-                                    ...item,
-                                    a_content: event.target.value,
-                                  }
+                                  ...item,
+                                  a_content: event.target.value,
+                                }
                                 : item
                             )
                           )
@@ -568,9 +575,9 @@ export function AIChat({
                             prev.map((item) =>
                               item.id === card.id
                                 ? {
-                                    ...item,
-                                    b_content: event.target.value,
-                                  }
+                                  ...item,
+                                  b_content: event.target.value,
+                                }
                                 : item
                             )
                           )
@@ -589,9 +596,9 @@ export function AIChat({
                           prev.map((item) =>
                             item.id === card.id
                               ? {
-                                  ...item,
-                                  notes: event.target.value,
-                                }
+                                ...item,
+                                notes: event.target.value,
+                              }
                               : item
                           )
                         )

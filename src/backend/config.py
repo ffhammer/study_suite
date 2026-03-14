@@ -21,13 +21,15 @@ class ApiConfig(BaseSettings):
 
     @property
     def DATABASE_URL(self):
-        return f"sqlite+aiosqlite:///{self.VAULT_BASE_PATH}db..db"
+        db_path = Path(self.VAULT_BASE_PATH).expanduser() / "db..db"
+        return f"sqlite+aiosqlite:///{db_path}"
 
     def save_join_file_path(self, course_folder: str, relpath: str) -> Path:
-        path = Path(self.VAULT_BASE_PATH) / course_folder / relpath
+        vault_base = Path(self.VAULT_BASE_PATH).expanduser().resolve()
+        path = (vault_base / course_folder / relpath).resolve()
 
         # Check if the target is still inside the vault
-        if not str(path).startswith(str(self.VAULT_BASE_PATH)):
+        if path != vault_base and vault_base not in path.parents:
             raise HTTPException(status_code=403, detail="Stay in your lane!")
 
         return path

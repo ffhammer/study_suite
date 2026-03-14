@@ -16,7 +16,7 @@ class CourseConfig(SQLModel, table=True):
 class ResourceMeta(SQLModel, table=True):
     """Caches slow LLM/Whisper tasks so you don't re-run them"""
 
-    id: Optional[UUID] = Field(default=None, primary_key=True)
+    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
     course: str = Field(
         sa_column=Column(
             String,
@@ -35,6 +35,7 @@ class ResourceMeta(SQLModel, table=True):
     # pass through types (Only filled in Tree, not Saved)
 
     last_processed: Optional[datetime] = None
+    last_modified_disk: Optional[datetime] = None
     size: Optional[int] = None
 
 

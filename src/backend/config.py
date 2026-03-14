@@ -6,11 +6,18 @@ from pydantic_settings import BaseSettings
 
 class ApiConfig(BaseSettings):
     VAULT_BASE_PATH: str = "/Users/felix/Desktop/study_suite/vault"
+    LOG_LEVEL: str = "DEBUG"
+    LOG_FORMAT: str = (
+        "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
+        "<level>{level: <8}</level> | "
+        "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> | "
+        "<level>{message}</level>"
+    )
 
-    VIDEO_SUFFIXES = [".mp4", ".mkv", ".mov"]
-    AUDIO_SUFFIXES = [".mp3", ".wav", ".m4a"]
-    IMG_SUFFIXES = [".png"]
-    LLM_MODEL = "gemini"  # the llm factory
+    VIDEO_SUFFIXES: list[str] = [".mp4", ".mkv", ".mov"]
+    AUDIO_SUFFIXES: list[str] = [".mp3", ".wav", ".m4a"]
+    IMG_SUFFIXES: list[str] = [".png"]
+    LLM_MODEL: str = "gemini"  # the llm factory
 
     @property
     def DATABASE_URL(self):

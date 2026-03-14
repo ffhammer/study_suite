@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, Search, PanelRight, MessageSquare, GraduationCap } from "lucide-react";
+import { ChevronDown, Search, PanelRight, MessageSquare, GraduationCap, Plus } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,8 +16,9 @@ interface TopNavbarProps {
   courses: CourseConfig[];
   coursesLoading?: boolean;
   onCourseChange: (courseName: string) => void;
-  currentView: "courses" | "anki";
-  onViewChange: (view: "courses" | "anki") => void;
+  onCreateCourse: () => void;
+  currentView: "overview" | "courses" | "anki";
+  onViewChange: (view: "overview" | "courses" | "anki") => void;
 }
 
 export function TopNavbar({
@@ -25,6 +26,7 @@ export function TopNavbar({
   courses,
   coursesLoading = false,
   onCourseChange,
+  onCreateCourse,
   currentView,
   onViewChange,
 }: TopNavbarProps) {
@@ -42,12 +44,20 @@ export function TopNavbar({
 
         <div className="flex items-center gap-1">
           <Button
+            variant={currentView === "overview" ? "secondary" : "ghost"}
+            size="sm"
+            className="h-7 text-xs"
+            onClick={() => onViewChange("overview")}
+          >
+            Overview
+          </Button>
+          <Button
             variant={currentView === "courses" ? "secondary" : "ghost"}
             size="sm"
             className="h-7 text-xs"
             onClick={() => onViewChange("courses")}
           >
-            Courses
+            Study
           </Button>
           <Button
             variant={currentView === "anki" ? "secondary" : "ghost"}
@@ -73,6 +83,10 @@ export function TopNavbar({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
+            <DropdownMenuItem onClick={onCreateCourse} className="gap-2">
+              <Plus className="h-3.5 w-3.5" />
+              Create Course
+            </DropdownMenuItem>
             {courses.map((c) => (
               <DropdownMenuItem
                 key={c.folder_name}
@@ -105,6 +119,11 @@ export function TopNavbar({
           <MessageSquare className="h-3 w-3" />
           <span>AI Chat</span>
           <Kbd>J</Kbd>
+        </div>
+        <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
+          <Plus className="h-3 w-3" />
+          <span>New File</span>
+          <Kbd>N</Kbd>
         </div>
       </div>
     </header>

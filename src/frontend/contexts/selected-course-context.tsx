@@ -16,6 +16,7 @@ interface SelectedCourseContextValue {
   loading: boolean;
   refreshCourses: () => Promise<void>;
   setSelectedCourse: (courseName: string) => void;
+  createCourse: (courseName: string) => Promise<void>;
 }
 
 const SelectedCourseContext = createContext<SelectedCourseContextValue | undefined>(
@@ -56,6 +57,17 @@ export function SelectedCourseProvider({ children }: { children: React.ReactNode
     setSelectedCourseState(courseName);
   }, []);
 
+  const createCourse = useCallback(async (courseName: string) => {
+    const trimmed = courseName.trim();
+    if (!trimmed) {
+      throw new Error("Course name cannot be empty");
+    }
+
+    await api.createCourse(trimmed);
+    await refreshCourses();
+    setSelectedCourseState(trimmed);
+  }, [refreshCourses]);
+
   const value = useMemo(
     () => ({
       courses,
@@ -63,8 +75,9 @@ export function SelectedCourseProvider({ children }: { children: React.ReactNode
       loading,
       refreshCourses,
       setSelectedCourse,
+      createCourse,
     }),
-    [courses, loading, refreshCourses, selectedCourse, setSelectedCourse]
+    [courses, createCourse, loading, refreshCourses, selectedCourse, setSelectedCourse]
   );
 
   return (

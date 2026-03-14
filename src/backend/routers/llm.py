@@ -190,6 +190,12 @@ async def get_response(
     await db.save(session)
 
     agent = request.app.state.agent
+    if agent is None:
+        raise HTTPException(
+            status_code=503,
+            detail="LLM is not configured. Set GEMINI_API_KEY or GOOGLE_API_KEY and restart the backend.",
+        )
+
     response = await agent.get_answer(
         session=session,
         new_message=user_msg,

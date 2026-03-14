@@ -17,6 +17,10 @@ class GeminiLearningAgent(BaseLearningAgent):
         super().__init__(system_message=system_message, model_name=model_name)
 
         api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+        if not api_key:
+            raise ValueError(
+                "No API key was provided. Set GEMINI_API_KEY or GOOGLE_API_KEY."
+            )
         self.client = genai.Client(api_key=api_key)
 
     async def get_answer(

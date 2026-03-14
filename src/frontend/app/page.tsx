@@ -7,23 +7,32 @@ import {
   ResizableHandle,
 } from "@/components/ui/resizable";
 import { TopNavbar } from "@/components/study-suite/top-navbar";
+import { CourseOverview } from "@/components/study-suite/course-overview";
 import { CourseWorkspace } from "@/components/study-suite/course-workspace";
 import { AIChat } from "@/components/study-suite/ai-chat";
 import { AnkiFlashcards } from "@/components/study-suite/anki-flashcards";
 import { CommandPalette } from "@/components/study-suite/command-palette";
+import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { buildTree, WorkspaceFileItem } from "@/lib/file-tree";
 import { useSelectedCourse } from "@/contexts/selected-course-context";
 import { useToast } from "@/hooks/use-toast";
 
 export default function StudySuite() {
-  const { courses, selectedCourse, setSelectedCourse, loading: coursesLoading } = useSelectedCourse();
+  const {
+    courses,
+    selectedCourse,
+    setSelectedCourse,
+    createCourse,
+    loading: coursesLoading,
+  } = useSelectedCourse();
   const { toast } = useToast();
-  const [currentView, setCurrentView] = useState<"courses" | "anki">("courses");
+  const [currentView, setCurrentView] = useState<"overview" | "courses" | "anki">("overview");
   const [showSidebar, setShowSidebar] = useState(true);
   const [showChat, setShowChat] = useState(true);
   const [commandOpen, setCommandOpen] = useState(false);
   const [treeFiles, setTreeFiles] = useState<WorkspaceFileItem[]>([]);
+  const [openFileId, setOpenFileId] = useState<string | null>(null);
 
   const refreshTree = useCallback(async () => {
     if (!selectedCourse) {
@@ -57,6 +66,18 @@ export default function StudySuite() {
       e.preventDefault();
       setCommandOpen(true);
     }
+    if (isMod && e.key === "1") {
+      e.preventDefault();
+      setCurrentView("overview");
+    }
+    if (isMod && e.key === "2") {
+      e.preventDefault();
+      setCurrentView("courses");
+    }
+    if (isMod && e.key === "3") {
+      e.preventDefault();
+      setCurrentView("anki");
+    }
     if (isMod && e.key === "b") {
       e.preventDefault();
       setShowSidebar((prev) => !prev);
@@ -72,10 +93,29 @@ export default function StudySuite() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleKeyDown]);
 
-  const handleFileSelect = (file: WorkspaceFileItem) => {
-    // Handle file selection from command palette
-    console.log("[v0] File selected:", file.name);
+  const handleOpenFileInStudy = (file: WorkspaceFileItem) => {
+    setCurrentView("courses");
+    setOpenFileId(file.id);
     setCommandOpen(false);
+  };
+
+  const handleCreateCourse = async () => {
+    const name = window.prompt("Enter a new course name");
+    if (!name) return;
+
+    try {
+      await createCourse(name);
+      toast({
+        title: "Course created",
+        description: `${name.trim()} is ready.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Could not create course",
+        description: error instanceof Error ? error.message : "Request failed.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -86,36 +126,73 @@ export default function StudySuite() {
         courses={courses}
         coursesLoading={coursesLoading}
         onCourseChange={setSelectedCourse}
+        onCreateCourse={() => {
+          handleCreateCourse().catch(() => undefined);
+        }}
         currentView={currentView}
         onViewChange={setCurrentView}
       />
 
       {/* Main Content */}
       <div className="flex-1 min-h-0">
-        {currentView === "courses" ? (
-          <ResizablePanelGroup direction="vertical" className="h-full">
-            <ResizablePanel defaultSize={showChat ? 70 : 100} minSize={30}>
-              <CourseWorkspace
-                showSidebar={showSidebar}
-                files={treeFiles}
-                selectedCourse={selectedCourse}
-                onRefreshFiles={() => {
-                  refreshTree().catch(() => undefined);
+        {!coursesLoading && courses.length === 0 && (
+          <div className="h-full flex items-center justify-center p-8">
+            <div className="max-w-md w-full rounded-lg border border-border bg-card p-6 text-center space-y-3">
+              <h2 className="text-lg font-semibold">No courses yet</h2>
+              <p className="text-sm text-muted-foreground">
+                Create your first course to load files, use chat context, and generate Anki cards.
+              </p>
+              <Button
+                onClick={() => {
+                  handleCreateCourse().catch(() => undefined);
                 }}
-              />
-            </ResizablePanel>
-            
-            {showChat && (
-              <>
-                <ResizableHandle />
-                <ResizablePanel defaultSize={30} minSize={20} maxSize={50}>
-                  <AIChat files={treeFiles} selectedCourse={selectedCourse} />
-                </ResizablePanel>
-              </>
-            )}
-          </ResizablePanelGroup>
-        ) : (
-          <AnkiFlashcards selectedCourse={selectedCourse} />
+                className="w-full"
+              >
+                Create First Course
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {!coursesLoading && courses.length > 0 && (
+          currentView === "overview" ? (
+            <CourseOverview
+              files={treeFiles}
+              selectedCourse={selectedCourse}
+              onOpenFile={(file) => {
+                handleOpenFileInStudy(file);
+              }}
+              onRefreshFiles={() => {
+                refreshTree().catch(() => undefined);
+              }}
+            />
+          ) : currentView === "courses" ? (
+            <ResizablePanelGroup direction="vertical" className="h-full">
+              <ResizablePanel defaultSize={showChat ? 70 : 100} minSize={30}>
+                <CourseWorkspace
+                  showSidebar={showSidebar}
+                  files={treeFiles}
+                  selectedCourse={selectedCourse}
+                  openFileId={openFileId}
+                  onOpenFileHandled={() => setOpenFileId(null)}
+                  onRefreshFiles={() => {
+                    refreshTree().catch(() => undefined);
+                  }}
+                />
+              </ResizablePanel>
+
+              {showChat && (
+                <>
+                  <ResizableHandle />
+                  <ResizablePanel defaultSize={30} minSize={20} maxSize={50}>
+                    <AIChat files={treeFiles} selectedCourse={selectedCourse} />
+                  </ResizablePanel>
+                </>
+              )}
+            </ResizablePanelGroup>
+          ) : (
+            <AnkiFlashcards selectedCourse={selectedCourse} />
+          )
         )}
       </div>
 
@@ -124,7 +201,7 @@ export default function StudySuite() {
         open={commandOpen}
         onOpenChange={setCommandOpen}
         files={treeFiles}
-        onFileSelect={handleFileSelect}
+        onFileSelect={handleOpenFileInStudy}
       />
     </div>
   );

@@ -1,0 +1,16 @@
+.git
+.gitignore
+.venv
+.python-version
+.ruff_cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+node_modules/
+src/frontend/node_modules/
+src/frontend/.next/
+.archive/
+turri-agentic-ecommerce/
+vault/

@@ -17,6 +17,7 @@ async def list_courses(request: Request) -> list[CourseConfig]:
     db: DataBase = request.app.state.db
     config: ApiConfig = request.app.state.config
     courses: list[CourseConfig] = await db.query_table(CourseConfig, mode="all")
+    logger.debug("list courses requested")
 
     exist = []
     for course in courses:
@@ -26,6 +27,7 @@ async def list_courses(request: Request) -> list[CourseConfig]:
             continue
         exist.append(course)
 
+    logger.info("list courses result: {} available", len(exist))
     return exist
 
 
@@ -33,6 +35,7 @@ async def list_courses(request: Request) -> list[CourseConfig]:
 async def rename_course(course_name: str, new_name: str, request: Request):
     db: DataBase = request.app.state.db
     config: ApiConfig = request.app.state.config
+    logger.info("rename course requested: {} -> {}", course_name, new_name)
     course: CourseConfig = await db.query_table(
         CourseConfig,
         mode="first",
@@ -74,6 +77,7 @@ async def rename_course(course_name: str, new_name: str, request: Request):
 @courses.put("/course/{course_name}/toggle-activity")
 async def togge_acticity(course_name: str, request: Request):
     db: DataBase = request.app.state.db
+    logger.info("toggle course activity requested: {}", course_name)
     course: CourseConfig = await db.query_table(
         CourseConfig,
         mode="first",
@@ -91,6 +95,7 @@ async def togge_acticity(course_name: str, request: Request):
 async def create_course(course_name: str, request: Request):
     db: DataBase = request.app.state.db
     config: ApiConfig = request.app.state.config
+    logger.info("create course requested: {}", course_name)
 
     course: CourseConfig = await db.query_table(
         CourseConfig,
@@ -100,11 +105,15 @@ async def create_course(course_name: str, request: Request):
 
     path = Path(config.VAULT_BASE_PATH) / course_name
 
-    if course is not None or path.exist():
-        raise HTTPException(status_code=404, detail="Course not found")
+    if not course_name.strip():
+        raise HTTPException(status_code=400, detail="course_name cannot be empty")
+
+    if course is not None or path.exists():
+        raise HTTPException(status_code=409, detail="Course already exists")
 
     path.mkdir(parents=True)
     await db.save(CourseConfig(folder_name=course_name, is_active=True))
+    logger.info("course created: {}", course_name)
 
 
 @courses.get("/course/{course_name}/tree")
@@ -112,6 +121,7 @@ async def course_tree(course_name, request: Request) -> list[ResourceMeta]:
     """Returns Folder Tree as a simple flat list, the UI can make a tree out of it easily based on real path"""
     db: DataBase = request.app.state.db
     config: ApiConfig = request.app.state.config
+    logger.debug("course tree requested: {}", course_name)
     course: CourseConfig = await db.query_table(
         CourseConfig,
         mode="first",
@@ -150,4 +160,5 @@ async def course_tree(course_name, request: Request) -> list[ResourceMeta]:
         meta.size = stat.st_size
 
         files.append(meta)
+    logger.info("course tree built: course={}, files={}", course_name, len(files))
     return files

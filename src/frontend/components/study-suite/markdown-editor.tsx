@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Bold, Italic, List, ListOrdered, Code, Link2, Image, Eye, Edit3, Save } from "lucide-react";
+import { Bold, Italic, List, ListOrdered, Code, Link2, ImageIcon, Eye, Edit3, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
@@ -224,6 +224,19 @@ export function MarkdownEditor({ file, initialContent, onSave }: MarkdownEditorP
     }
   };
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const isMod = event.metaKey || event.ctrlKey;
+      if (isMod && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        handleSave().catch(() => undefined);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [content, onSave]);
+
   return (
     <div className="h-full flex flex-col">
       {/* Toolbar */}
@@ -255,7 +268,7 @@ export function MarkdownEditor({ file, initialContent, onSave }: MarkdownEditorP
                 <ListOrdered className="h-3.5 w-3.5" />
               </Button>
               <Button variant="ghost" size="icon" className="h-7 w-7">
-                <Image className="h-3.5 w-3.5" />
+                <ImageIcon className="h-3.5 w-3.5" />
               </Button>
               <div className="h-4 w-px bg-border mx-1" />
               <Button
@@ -266,7 +279,7 @@ export function MarkdownEditor({ file, initialContent, onSave }: MarkdownEditorP
                 disabled={isSaving}
               >
                 <Save className="h-3.5 w-3.5" />
-                {isSaving ? "Saving..." : "Save"}
+                {isSaving ? "Saving..." : "Save (Cmd/Ctrl+S)"}
               </Button>
             </>
           )}

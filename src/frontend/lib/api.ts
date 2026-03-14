@@ -1,4 +1,8 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  (typeof window !== "undefined"
+    ? `${window.location.protocol}//${window.location.hostname}:8000`
+    : "http://localhost:8000");
 
 export interface CourseConfig {
   folder_name: string;
@@ -83,8 +87,71 @@ export const api = {
     return fetchJSON<CourseConfig[]>("/courses/list");
   },
 
+  createCourse(courseName: string) {
+    return fetchJSON<void>(
+      `/courses/create_course/?course_name=${encodeURIComponent(courseName)}`,
+      {
+        method: "PUT",
+      }
+    );
+  },
+
   getCourseTree(courseName: string) {
     return fetchJSON<ResourceMeta[]>(`/courses/course/${encodeURIComponent(courseName)}/tree`);
+  },
+
+  async uploadFile(courseName: string, file: File, targetRelPath?: string) {
+    const formData = new FormData();
+    formData.append("file", file);
+    if (targetRelPath) {
+      formData.append("target_rel_path", targetRelPath);
+    }
+
+    const response = await fetch(
+      `${API_BASE_URL}/files/upload/${encodeURIComponent(courseName)}`,
+      {
+        method: "POST",
+        body: formData,
+        cache: "no-store",
+      }
+    );
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || `Request failed with status ${response.status}`);
+    }
+
+    return (await response.json()) as {
+      filename: string;
+      size: number;
+      status: string;
+    };
+  },
+
+  startTranscription(courseName: string, relativePath: string) {
+    return fetchJSON<{ message: string; job_id: string }>(
+      `/files/transcribe/${encodeURIComponent(courseName)}/${encodeURI(relativePath)}`,
+      { method: "POST" }
+    );
+  },
+
+  getTranscriptionStatus(courseName: string, relativePath: string) {
+    return fetchJSON<{
+      status: string;
+      progress?: number;
+      total?: number;
+      error?: string | null;
+    }>(`/files/transcribe/status/${encodeURIComponent(courseName)}/${encodeURI(relativePath)}`);
+  },
+
+  updateTranscribedText(courseName: string, relativePath: string, newText: string) {
+    return fetchJSON<void>(
+      `/files/meta/edit-transcriped-text/${encodeURIComponent(courseName)}/${encodeURI(relativePath)}`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ content: newText }),
+      }
+    );
   },
 
   getTextContent(courseName: string, relativePath: string) {
@@ -96,6 +163,16 @@ export const api = {
   updateTextContent(courseName: string, relativePath: string, content: string) {
     return fetchJSON<{ status: string; last_modified: string }>(
       `/files/text-update/${encodeURIComponent(courseName)}/${encodeURI(relativePath)}`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ content }),
+      }
+    );
+  },
+
+  createTextFile(courseName: string, relativePath: string, content = "") {
+    return fetchJSON<{ status: string; last_modified: string }>(
+      `/files/text-create/${encodeURIComponent(courseName)}/${encodeURI(relativePath)}`,
       {
         method: "PUT",
         body: JSON.stringify({ content }),

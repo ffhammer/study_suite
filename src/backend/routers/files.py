@@ -28,6 +28,7 @@ file_router = APIRouter(prefix="/files", tags=["files"])
 @file_router.get("/raw/{course_name}/{rel_path:path}")
 async def get_raw_file(course_name: str, rel_path: str, request: Request):
     config: ApiConfig = request.app.state.config
+    logger.debug("raw file requested: course={}, rel_path={}", course_name, rel_path)
 
     file_path = config.save_join_file_path(course_name, rel_path)
 
@@ -49,6 +50,7 @@ async def get_meta(course_name, rel_path: str, request: Request) -> ResourceMeta
     """Returns Resource Meta. If not exist -> UUID is None"""
     db: DataBase = request.app.state.db
     config: ApiConfig = request.app.state.config
+    logger.debug("metadata requested: course={}, rel_path={}", course_name, rel_path)
 
     meta = db.query_table(
         ResourceMeta,
@@ -73,14 +75,17 @@ async def get_meta(course_name, rel_path: str, request: Request) -> ResourceMeta
     return meta
 
 
-@file_router.get("/meta/edit-transcriped-text/{course_name}/{rel_path:path}")
-async def edit_transcribed_text(
-    course_name, rel_path: str, new_text: str, request: Request
+@file_router.put("/meta/edit-transcriped-text/{course_name}/{rel_path:path}")
+async def edit_transcribed_text_put(
+    course_name: str, rel_path: str, data: TextUpdate, request: Request
 ) -> ResourceMeta:
-    """Returns Resource Meta. If not exist -> UUID is None"""
+    """Updates transcribed text via JSON body (preferred over query-string GET)."""
     db: DataBase = request.app.state.db
+    logger.info(
+        "manual transcript edit (PUT): course={}, rel_path={}", course_name, rel_path
+    )
 
-    meta: ResourceMeta = db.query_table(
+    meta: ResourceMeta = await db.query_table(
         ResourceMeta,
         where_clauses=[
             ResourceMeta.course == course_name,
@@ -92,14 +97,16 @@ async def edit_transcribed_text(
     if meta is None:
         raise HTTPException(status_code=404, detail="File not found")
 
-    meta.transcript_text = new_text
+    meta.transcript_text = data.content
     await db.save(meta)
+    return meta
 
 
 @file_router.delete("/del/{course_name}/{rel_path:path}")
 async def delete_file_or_folder(course_name: str, rel_path: str, request: Request):
     db: DataBase = request.app.state.db
     config: ApiConfig = request.app.state.config
+    logger.info("delete requested: course={}, rel_path={}", course_name, rel_path)
 
     item_path = config.save_join_file_path(course_name, rel_path)
     if not item_path.exists():
@@ -157,6 +164,7 @@ async def delete_file_or_folder(course_name: str, rel_path: str, request: Reques
 async def get_text_content(course_name: str, rel_path: str, request: Request):
     """Reads a file from disk and returns it as a string for the editor."""
     config: ApiConfig = request.app.state.config
+    logger.debug("text read requested: course={}, rel_path={}", course_name, rel_path)
     file_path = config.save_join_file_path(course_name, rel_path)
 
     if not file_path.exists() or not file_path.is_file():
@@ -180,6 +188,7 @@ async def update_text_file(
     """Overwrites a text file on disk with new content."""
     db: DataBase = request.app.state.db
     config: ApiConfig = request.app.state.config
+    logger.info("text update requested: course={}, rel_path={}", course_name, rel_path)
     file_path = config.save_join_file_path(course_name, rel_path)
 
     if not file_path.exists():
@@ -213,6 +222,36 @@ async def update_text_file(
         raise HTTPException(status_code=500, detail="Failed to write file to disk")
 
 
+@file_router.put("/text-create/{course_name}/{rel_path:path}")
+async def create_text_file(
+    course_name: str, rel_path: str, data: TextUpdate, request: Request
+):
+    """Creates a new text file on disk and stores initial metadata."""
+    db: DataBase = request.app.state.db
+    config: ApiConfig = request.app.state.config
+    logger.info("text create requested: course={}, rel_path={}", course_name, rel_path)
+    file_path = config.save_join_file_path(course_name, rel_path)
+
+    if file_path.exists():
+        raise HTTPException(status_code=409, detail="File already exists")
+
+    try:
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_text(data.content, encoding="utf-8")
+
+        stat = file_path.stat()
+        meta = ResourceMeta(course=course_name, relative_path=rel_path)
+        meta.size = stat.st_size
+        meta.last_modified_disk = datetime.fromtimestamp(stat.st_mtime)
+        await db.save(meta)
+
+        return {"status": "created", "last_modified": datetime.now()}
+
+    except Exception as e:
+        logger.error(f"Failed to create text file: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create file on disk")
+
+
 @file_router.post("/upload/{course_name}")
 async def upload_file(
     course_name: str,
@@ -222,6 +261,12 @@ async def upload_file(
 ):
     db: DataBase = request.app.state.db
     config: ApiConfig = request.app.state.config
+    logger.info(
+        "upload requested: course={}, filename={}, target_rel_path={}",
+        course_name,
+        file.filename,
+        target_rel_path,
+    )
 
     # 1. Determine the final path
     # If no target_rel_path is sent, use the original filename
@@ -255,6 +300,13 @@ async def upload_file(
 
         await db.save(meta)
 
+        logger.info(
+            "upload completed: course={}, final_rel_path={}, size={}B",
+            course_name,
+            final_rel_path,
+            meta.size,
+        )
+
         return {"filename": final_rel_path, "size": meta.size, "status": "uploaded"}
 
     except Exception as e:
@@ -272,18 +324,27 @@ async def background_transcription_worker(
     job_id = f"{course_name}/{rel_path}"
     file_path = config.save_join_file_path(course_name, rel_path)
     audio_path = file_path
+    logger.info("transcription worker started: job_id={}", job_id)
 
     try:
         # Step 1: Handle Video -> Audio Extraction
         if file_path.suffix in config.VIDEO_SUFFIXES:
             jobs_dict[job_id]["status"] = "extracting_audio"
             audio_path = file_path.with_suffix(".mp3")
+            logger.debug(
+                "transcription extracting audio: job_id={}, source={}",
+                job_id,
+                file_path,
+            )
 
             if not audio_path.exists():
                 await asyncio.to_thread(extract_audio_sync, file_path, audio_path)
 
         # Step 2: Run Transcription
         jobs_dict[job_id]["status"] = "starting_whisper"
+        logger.debug(
+            "transcription whisper start: job_id={}, audio_path={}", job_id, audio_path
+        )
         final_text = await asyncio.to_thread(
             run_whisper_sync, audio_path, job_id, jobs_dict
         )
@@ -302,6 +363,11 @@ async def background_transcription_worker(
         if meta:
             meta.transcript_text = final_text
             await db.save(meta)
+            logger.debug(
+                "transcription text persisted: job_id={}, chars={}",
+                job_id,
+                len(final_text),
+            )
 
         # Step 4: Cleanup
         jobs_dict[job_id]["status"] = "completed"
@@ -310,6 +376,8 @@ async def background_transcription_worker(
         # If we created a temporary audio file from a video, delete it to save space
         if file_path.suffix in config.VIDEO_SUFFIXES and audio_path.exists():
             audio_path.unlink()
+
+        logger.info("transcription completed: job_id={}", job_id)
 
     except Exception as e:
         logger.error(f"Transcription failed for {job_id}: {e}")
@@ -326,6 +394,7 @@ async def start_transcription(
     db: DataBase = request.app.state.db
     jobs_dict: dict = request.app.state.transcription_jobs
     job_id = f"{course_name}/{rel_path}"
+    logger.info("transcription requested: job_id={}", job_id)
 
     file_path = config.save_join_file_path(course_name, rel_path)
 
@@ -342,6 +411,11 @@ async def start_transcription(
         "failed",
         "completed",
     ]:
+        logger.debug(
+            "transcription already in progress: job_id={}, status={}",
+            job_id,
+            jobs_dict[job_id]["status"],
+        )
         return {"message": "Transcription already in progress", "job_id": job_id}
 
     # Initialize progress state
@@ -365,6 +439,7 @@ async def get_transcription_status(course_name: str, rel_path: str, request: Req
     """Frontend polls this to update the progress bar."""
     job_id = f"{course_name}/{rel_path}"
     jobs_dict: dict = request.app.state.transcription_jobs
+    logger.debug("transcription status requested: job_id={}", job_id)
 
     if job_id not in jobs_dict:
         return {"status": "not_started"}

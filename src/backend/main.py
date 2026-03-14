@@ -1,8 +1,8 @@
 import os
 import sys
 import time
-from uuid import uuid4
 from contextlib import asynccontextmanager
+from uuid import uuid4
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
@@ -11,11 +11,11 @@ from loguru import logger
 
 from src.backend.config import ApiConfig
 from src.backend.database.db import DataBase
+from src.backend.llm import load_agent
 from src.backend.routers.anki import anki_router
 from src.backend.routers.courses import courses
 from src.backend.routers.files import file_router
 from src.backend.routers.llm import chat_router
-from src.backend.llm import load_agent
 
 
 def configure_logging(config: ApiConfig) -> None:

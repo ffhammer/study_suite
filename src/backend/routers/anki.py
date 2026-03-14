@@ -1,5 +1,5 @@
 from datetime import date, datetime, timedelta
-from uuid import uuid4, UUID
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, HTTPException, Request
 from loguru import logger

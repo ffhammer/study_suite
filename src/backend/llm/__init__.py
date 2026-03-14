@@ -1,6 +1,6 @@
 from src.backend.config import ApiConfig
-from .base import BaseLearningAgent, LLMResponse
 
+from .base import BaseLearningAgent
 
 SYSTEM_PROMPT = """You are Felix's dedicated AI learning assistant. Your primary goal is to help him study, understand complex concepts, summarize lectures, and actively memorize information.
 
@@ -36,7 +36,6 @@ Tone: Encouraging, academic, direct, and intelligent. No fluff. Get straight to 
 
 
 def load_agent(config: ApiConfig) -> BaseLearningAgent:
-
     if config.LLM_MODEL.startswith("gemini"):
         from .gemini import GeminiLearningAgent
 

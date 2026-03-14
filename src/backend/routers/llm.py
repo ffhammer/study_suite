@@ -9,7 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from src.backend.config import ApiConfig
 from src.backend.database.db import DataBase
-from src.backend.database.models import ChatSession, ChatMessage, ChatMessageImage
+from src.backend.database.models import ChatMessage, ChatMessageImage, ChatSession
 from src.backend.llm.base import (
     ChatEndpointResponse,
     ChatResponseMessage,

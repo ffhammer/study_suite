@@ -1,5 +1,5 @@
-import os
 import mimetypes
+import os
 from pathlib import Path
 from typing import List
 
@@ -29,7 +29,6 @@ class GeminiLearningAgent(BaseLearningAgent):
         new_message: ChatMessage,
         context_paths: List[Path] = [],
     ) -> LLMResponse:
-
         # 3. Build dynamic Part objects for Context (PDFs as inline 64-bit & High-Res Images)
         # We process these directly into SDK Part objects instead of long concatenated strings
         context_parts = []

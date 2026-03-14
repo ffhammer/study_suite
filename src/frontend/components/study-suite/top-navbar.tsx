@@ -43,7 +43,7 @@ export function TopNavbar({
   const course = courses.find((c) => c.folder_name === currentCourse);
 
   return (
-    <header className="h-10 border-b border-border bg-sidebar flex items-center justify-between px-3 shrink-0">
+    <header className="h-10 border-b border-border bg-sidebar flex items-center gap-3 px-3 shrink-0">
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
           <GraduationCap className="h-4 w-4 text-muted-foreground" />
@@ -118,39 +118,51 @@ export function TopNavbar({
             <div className="h-4 w-px bg-border" />
             <div className="flex items-center gap-2 min-w-0">
               {primaryOpenFileName && (
-                <span className="text-xs text-muted-foreground truncate max-w-[220px]" title={primaryOpenFileName}>
+                <span
+                  className="inline-flex items-center h-7 px-2.5 rounded-md border border-border/70 bg-muted/35 text-sm font-semibold text-foreground truncate max-w-[260px]"
+                  title={primaryOpenFileName}
+                >
                   {primaryOpenFileName}
                 </span>
               )}
               {secondaryOpenFileName && (
-                <span className="text-xs text-muted-foreground truncate max-w-[220px]" title={secondaryOpenFileName}>
+                <span
+                  className="inline-flex items-center h-7 px-2.5 rounded-md border border-border/70 bg-muted/35 text-sm font-semibold text-foreground truncate max-w-[220px]"
+                  title={secondaryOpenFileName}
+                >
                   {secondaryOpenFileName}
                 </span>
               )}
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 text-xs gap-1.5"
-                onClick={onCreateFile}
-              >
-                <Plus className="h-3.5 w-3.5" />
-                New File
-              </Button>
-              <Button
-                variant={splitScreen ? "secondary" : "ghost"}
-                size="sm"
-                className="h-7 text-xs gap-1.5"
-                onClick={onToggleSplit}
-              >
-                <SplitSquareHorizontal className="h-3.5 w-3.5" />
-                Split (Cmd/Ctrl+I)
-              </Button>
             </div>
           </>
         )}
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="ml-auto flex items-center gap-3">
+        {currentView === "courses" && (
+          <>
+            <button
+              type="button"
+              className="h-7 px-2 rounded-md inline-flex items-center gap-1.5 text-xs text-muted-foreground/80 hover:text-foreground hover:bg-muted/30 transition-colors"
+              onClick={onCreateFile}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span>New File</span>
+              <Kbd>N</Kbd>
+            </button>
+            <button
+              type="button"
+              className="h-7 px-2 rounded-md inline-flex items-center gap-1.5 text-xs transition-colors hover:bg-muted/30"
+              onClick={onToggleSplit}
+            >
+              <SplitSquareHorizontal
+                className={splitScreen ? "h-3.5 w-3.5 text-foreground" : "h-3.5 w-3.5 text-muted-foreground/80"}
+              />
+              <span className={splitScreen ? "text-foreground" : "text-muted-foreground/80"}>Split</span>
+              <Kbd>I</Kbd>
+            </button>
+          </>
+        )}
         <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
           <Search className="h-3 w-3" />
           <span>Search Files</span>
@@ -166,13 +178,6 @@ export function TopNavbar({
           <span>AI Chat</span>
           <Kbd>J</Kbd>
         </div>
-        {currentView === "courses" && (
-          <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
-            <SplitSquareHorizontal className="h-3 w-3" />
-            <span>Split</span>
-            <Kbd>I</Kbd>
-          </div>
-        )}
       </div>
     </header>
   );

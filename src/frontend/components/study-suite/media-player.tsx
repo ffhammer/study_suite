@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FileAudio, FileVideo, Search, EyeOff, Eye, Save } from "lucide-react";
+import { FileAudio, Search, EyeOff, Eye, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -126,11 +126,7 @@ export function MediaPlayer({ file, sourceUrl, onSaveTranscript }: MediaPlayerPr
               <audio controls className="w-full" src={sourceUrl} preload="metadata" />
             </div>
           ) : (
-            <div className="w-full h-full flex flex-col items-center justify-center gap-2">
-              <div className="flex items-center gap-2 text-white/80 text-sm">
-                <FileVideo className="h-4 w-4" />
-                <span className="truncate max-w-full">{file.name}</span>
-              </div>
+            <div className="w-full h-full flex items-center justify-center">
               <video controls className="h-full w-full" src={sourceUrl} preload="metadata" />
             </div>
           )}

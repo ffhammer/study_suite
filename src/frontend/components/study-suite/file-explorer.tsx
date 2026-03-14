@@ -18,12 +18,31 @@ import { cn } from "@/lib/utils";
 import { WorkspaceFileItem, formatBytes } from "@/lib/file-tree";
 import { Button } from "@/components/ui/button";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
@@ -313,17 +332,31 @@ export function FileExplorer({
   onRefresh,
 }: FileExplorerProps) {
   const { toast } = useToast();
+  const [createFileOpen, setCreateFileOpen] = useState(false);
+  const [newFilePath, setNewFilePath] = useState("");
+  const [createFolderOpen, setCreateFolderOpen] = useState(false);
+  const [newFolderPath, setNewFolderPath] = useState("");
+  const [renameDialogState, setRenameDialogState] = useState<{
+    open: boolean;
+    item: WorkspaceFileItem | null;
+    nextName: string;
+  }>({
+    open: false,
+    item: null,
+    nextName: "",
+  });
+  const [deleteTarget, setDeleteTarget] = useState<WorkspaceFileItem | null>(null);
 
   const createFile = async () => {
     if (!selectedCourse) return;
-    const input = window.prompt("New file path (e.g. Notes/todo.md)");
-    if (!input) return;
-    const relPath = input.trim().replace(/^\/+/, "");
+    const relPath = newFilePath.trim().replace(/^\/+/, "");
     if (!relPath) return;
 
     try {
       await api.createTextFile(selectedCourse, relPath.includes(".") ? relPath : `${relPath}.md`, "");
       toast({ title: "File created", description: relPath });
+      setCreateFileOpen(false);
+      setNewFilePath("");
       onRefresh?.();
     } catch (error) {
       toast({
@@ -336,14 +369,14 @@ export function FileExplorer({
 
   const createFolder = async () => {
     if (!selectedCourse) return;
-    const input = window.prompt("New folder path (e.g. Lectures/Week-01)");
-    if (!input) return;
-    const relPath = input.trim().replace(/^\/+|\/+$/g, "");
+    const relPath = newFolderPath.trim().replace(/^\/+|\/+$/g, "");
     if (!relPath) return;
 
     try {
       await api.createFolder(selectedCourse, relPath);
       toast({ title: "Folder created", description: relPath });
+      setCreateFolderOpen(false);
+      setNewFolderPath("");
       onRefresh?.();
     } catch (error) {
       toast({
@@ -370,27 +403,37 @@ export function FileExplorer({
     }
   };
 
-  const renameItem = async (item: WorkspaceFileItem) => {
-    if (!selectedCourse || !item.relativePath) return;
-    const nextName = window.prompt("Rename to:", item.name);
-    if (!nextName) return;
+  const openRenameDialog = (item: WorkspaceFileItem) => {
+    setRenameDialogState({
+      open: true,
+      item,
+      nextName: item.name,
+    });
+  };
 
-    const cleanName = nextName.trim();
-    if (!cleanName || cleanName === item.name) return;
+  const renameItem = async () => {
+    const item = renameDialogState.item;
+    if (!selectedCourse || !item?.relativePath) return;
+    const cleanName = renameDialogState.nextName.trim();
+    if (!cleanName || cleanName === item.name) {
+      setRenameDialogState({ open: false, item: null, nextName: "" });
+      return;
+    }
 
     const parent = getParentPath(item.relativePath);
     const target = parent ? `${parent}/${cleanName}` : cleanName;
     await moveItem(item.relativePath, target);
+    setRenameDialogState({ open: false, item: null, nextName: "" });
   };
 
-  const deleteItem = async (item: WorkspaceFileItem) => {
-    if (!selectedCourse || !item.relativePath) return;
-    const confirmed = window.confirm(`Delete ${item.type} \"${item.name}\"? This cannot be undone.`);
-    if (!confirmed) return;
+  const deleteItem = async () => {
+    const item = deleteTarget;
+    if (!selectedCourse || !item?.relativePath) return;
 
     try {
       await api.deleteItem(selectedCourse, item.relativePath);
       toast({ title: "Deleted", description: item.relativePath });
+      setDeleteTarget(null);
       onRefresh?.();
     } catch (error) {
       toast({
@@ -416,10 +459,10 @@ export function FileExplorer({
         <div className="flex items-center gap-1">
           {allowManagement && (
             <>
-              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => createFile().catch(() => undefined)}>
+              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setCreateFileOpen(true)}>
                 <FilePlus2 className="h-3 w-3" />
               </Button>
-              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => createFolder().catch(() => undefined)}>
+              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setCreateFolderOpen(true)}>
                 <FolderPlus className="h-3 w-3" />
               </Button>
             </>
@@ -459,10 +502,10 @@ export function FileExplorer({
               onDownload={downloadItem}
               allowManagement={allowManagement}
               onRename={(target) => {
-                renameItem(target).catch(() => undefined);
+                openRenameDialog(target);
               }}
               onDelete={(target) => {
-                deleteItem(target).catch(() => undefined);
+                setDeleteTarget(target);
               }}
               onMove={(fromPath, toPath) => {
                 moveItem(fromPath, toPath).catch(() => undefined);
@@ -472,6 +515,152 @@ export function FileExplorer({
           ))}
         </div>
       </ScrollArea>
+
+      <Dialog
+        open={createFileOpen}
+        onOpenChange={(open) => {
+          setCreateFileOpen(open);
+          if (!open) setNewFilePath("");
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create File</DialogTitle>
+            <DialogDescription>Enter a path like Notes/todo.md</DialogDescription>
+          </DialogHeader>
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              createFile().catch(() => undefined);
+            }}
+          >
+            <Input
+              autoFocus
+              value={newFilePath}
+              onChange={(event) => setNewFilePath(event.target.value)}
+              placeholder="Notes/todo.md"
+            />
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setCreateFileOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit">Create</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={createFolderOpen}
+        onOpenChange={(open) => {
+          setCreateFolderOpen(open);
+          if (!open) setNewFolderPath("");
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create Folder</DialogTitle>
+            <DialogDescription>Enter a path like Lectures/Week-01</DialogDescription>
+          </DialogHeader>
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              createFolder().catch(() => undefined);
+            }}
+          >
+            <Input
+              autoFocus
+              value={newFolderPath}
+              onChange={(event) => setNewFolderPath(event.target.value)}
+              placeholder="Lectures/Week-01"
+            />
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setCreateFolderOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit">Create</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={renameDialogState.open}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRenameDialogState({ open: false, item: null, nextName: "" });
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename</DialogTitle>
+            <DialogDescription>
+              {renameDialogState.item ? `Rename ${renameDialogState.item.name}` : "Rename item"}
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              renameItem().catch(() => undefined);
+            }}
+          >
+            <Input
+              autoFocus
+              value={renameDialogState.nextName}
+              onChange={(event) =>
+                setRenameDialogState((prev) => ({
+                  ...prev,
+                  nextName: event.target.value,
+                }))
+              }
+              placeholder="New name"
+            />
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setRenameDialogState({ open: false, item: null, nextName: "" })}
+              >
+                Cancel
+              </Button>
+              <Button type="submit">Save</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete item?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget
+                ? `Delete ${deleteTarget.type} \"${deleteTarget.name}\"? This cannot be undone.`
+                : "This cannot be undone."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                deleteItem().catch(() => undefined);
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

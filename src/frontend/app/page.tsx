@@ -13,6 +13,15 @@ import { AIChat } from "@/components/study-suite/ai-chat";
 import { AnkiFlashcards } from "@/components/study-suite/anki-flashcards";
 import { CommandPalette } from "@/components/study-suite/command-palette";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
 import { buildTree, WorkspaceFileItem } from "@/lib/file-tree";
 import { useSelectedCourse } from "@/contexts/selected-course-context";
@@ -48,6 +57,8 @@ export default function StudySuite() {
   const [splitScreen, setSplitScreen] = useState(false);
   const [summaryEditProposal, setSummaryEditProposal] = useState<SummaryEditProposal | null>(null);
   const [focusMode, setFocusMode] = useState(false);
+  const [createCourseDialogOpen, setCreateCourseDialogOpen] = useState(false);
+  const [newCourseName, setNewCourseName] = useState("");
 
   const toggleFocusMode = useCallback(async () => {
     const next = !focusMode;
@@ -164,15 +175,21 @@ export default function StudySuite() {
     setCommandOpen(false);
   };
 
-  const handleCreateCourse = async () => {
-    const name = window.prompt("Enter a new course name");
+  const handleCreateCourse = () => {
+    setCreateCourseDialogOpen(true);
+  };
+
+  const submitCreateCourse = async () => {
+    const name = newCourseName.trim();
     if (!name) return;
 
     try {
       await createCourse(name);
+      setCreateCourseDialogOpen(false);
+      setNewCourseName("");
       toast({
         title: "Course created",
-        description: `${name.trim()} is ready.`,
+        description: `${name} is ready.`,
       });
     } catch (error) {
       toast({
@@ -191,9 +208,7 @@ export default function StudySuite() {
         courses={courses}
         coursesLoading={coursesLoading}
         onCourseChange={setSelectedCourse}
-        onCreateCourse={() => {
-          handleCreateCourse().catch(() => undefined);
-        }}
+        onCreateCourse={handleCreateCourse}
         primaryOpenFileName={primaryOpenFileName}
         secondaryOpenFileName={secondaryOpenFileName}
         splitScreen={splitScreen}
@@ -218,7 +233,7 @@ export default function StudySuite() {
               </p>
               <Button
                 onClick={() => {
-                  handleCreateCourse().catch(() => undefined);
+                  handleCreateCourse();
                 }}
                 className="w-full"
               >
@@ -315,6 +330,41 @@ export default function StudySuite() {
         files={treeFiles}
         onFileSelect={handleOpenFileInStudy}
       />
+
+      <Dialog
+        open={createCourseDialogOpen}
+        onOpenChange={(open) => {
+          setCreateCourseDialogOpen(open);
+          if (!open) setNewCourseName("");
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create Course</DialogTitle>
+            <DialogDescription>Choose a name for your new course.</DialogDescription>
+          </DialogHeader>
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              submitCreateCourse().catch(() => undefined);
+            }}
+          >
+            <Input
+              autoFocus
+              value={newCourseName}
+              onChange={(event) => setNewCourseName(event.target.value)}
+              placeholder="Klimasysteme"
+            />
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setCreateCourseDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit">Create</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

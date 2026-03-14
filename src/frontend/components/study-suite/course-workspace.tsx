@@ -22,6 +22,16 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 
 interface SummaryEditProposal {
   requestId: number;
@@ -84,6 +94,8 @@ export function CourseWorkspace({
   const [isSavingSummaryEdit, setIsSavingSummaryEdit] = useState(false);
   const lastCreateFileTrigger = useRef<number | undefined>(undefined);
   const lastToggleSplitTrigger = useRef<number | undefined>(undefined);
+  const [createFileDialogOpen, setCreateFileDialogOpen] = useState(false);
+  const [newFilePath, setNewFilePath] = useState("");
 
   const flatFiles = useMemo(() => flattenFiles(files), [files]);
   const flatFileItems = useMemo(() => flatFiles.map((item) => item.file), [flatFiles]);
@@ -380,16 +392,21 @@ export function CourseWorkspace({
       return;
     }
 
-    const input = window.prompt("New file path (e.g., Notes/summary.md)");
-    if (!input) return;
+    setCreateFileDialogOpen(true);
+  }, [selectedCourse, toast]);
 
-    const trimmed = input.trim().replace(/^\/+/, "");
+  const submitCreateFile = useCallback(async () => {
+    if (!selectedCourse) return;
+
+    const trimmed = newFilePath.trim().replace(/^\/+/, "");
     if (!trimmed) return;
     const relPath = trimmed.includes(".") ? trimmed : `${trimmed}.md`;
 
     try {
       await api.createTextFile(selectedCourse, relPath, "");
       setTextContents((prev) => ({ ...prev, [relPath]: "" }));
+      setCreateFileDialogOpen(false);
+      setNewFilePath("");
       toast({
         title: "File created",
         description: relPath,
@@ -402,7 +419,7 @@ export function CourseWorkspace({
         variant: "destructive",
       });
     }
-  }, [onRefreshFiles, selectedCourse, toast]);
+  }, [newFilePath, onRefreshFiles, selectedCourse, toast]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -597,7 +614,8 @@ export function CourseWorkspace({
   };
 
   return (
-    <ResizablePanelGroup direction="horizontal" className="h-full">
+    <>
+      <ResizablePanelGroup direction="horizontal" className="h-full">
       {showSidebar && (
         <>
           <ResizablePanel defaultSize={15} minSize={10} maxSize={35}>
@@ -686,6 +704,42 @@ export function CourseWorkspace({
           )}
         </div>
       </ResizablePanel>
-    </ResizablePanelGroup>
+      </ResizablePanelGroup>
+
+      <Dialog
+        open={createFileDialogOpen}
+        onOpenChange={(open) => {
+          setCreateFileDialogOpen(open);
+          if (!open) setNewFilePath("");
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create File</DialogTitle>
+            <DialogDescription>Enter a path like Notes/summary.md</DialogDescription>
+          </DialogHeader>
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              submitCreateFile().catch(() => undefined);
+            }}
+          >
+            <Input
+              autoFocus
+              value={newFilePath}
+              onChange={(event) => setNewFilePath(event.target.value)}
+              placeholder="Notes/summary.md"
+            />
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setCreateFileDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit">Create</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

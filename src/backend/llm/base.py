@@ -82,6 +82,12 @@ class BaseLearningAgent(ABC):
         self.system_message = system_message
         self.model_name = model_name
 
+    def set_model_name(self, model_name: str) -> None:
+        self.model_name = model_name
+
+    def set_system_message(self, system_message: str) -> None:
+        self.system_message = system_message
+
     @abstractmethod
     async def get_answer(
         self,

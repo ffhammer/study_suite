@@ -11,7 +11,7 @@ from loguru import logger
 
 from src.backend.config import ApiConfig
 from src.backend.database.db import DataBase
-from src.backend.llm import load_agent
+from src.backend.llm import DEFAULT_SYSTEM_PROMPT, load_agent
 from src.backend.routers.anki import anki_router
 from src.backend.routers.courses import courses
 from src.backend.routers.files import file_router
@@ -48,10 +48,17 @@ async def lifespan(app: FastAPI):
     os.makedirs(app.state.config.VAULT_BASE_PATH, exist_ok=True)
     app.state.db = DataBase(config=app.state.config)
     app.state.transcription_jobs = {}
+    app.state.chat_settings = {
+        "provider": app.state.config.LLM_PROVIDER,
+        "model": app.state.config.LLM_DEFAULT_MODEL,
+        "system_prompt": DEFAULT_SYSTEM_PROMPT,
+    }
     try:
         app.state.agent = load_agent(app.state.config)
         logger.info(
-            "LLM agent loaded successfully (model={})", app.state.config.LLM_MODEL
+            "LLM agent loaded successfully (provider={}, model={})",
+            app.state.config.LLM_PROVIDER,
+            app.state.config.LLM_DEFAULT_MODEL,
         )
     except ValueError as e:
         logger.warning(

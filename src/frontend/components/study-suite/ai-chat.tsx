@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
-import { Send, Paperclip, Bot, User, X, FileText, Check, ImagePlus } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Send, Paperclip, Bot, User, X, FileText, Check, ImagePlus, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -11,10 +11,19 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { flattenFiles, WorkspaceFileItem } from "@/lib/file-tree";
 import { useToast } from "@/hooks/use-toast";
+import { Label } from "@/components/ui/label";
 
 interface AIChatProps {
   className?: string;
@@ -117,10 +126,48 @@ export function AIChat({
   const [selectedImages, setSelectedImages] = useState<File[]>([]);
   const [conversationId, setConversationId] = useState<string | undefined>(undefined);
   const [isSending, setIsSending] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsLoading, setSettingsLoading] = useState(true);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [provider, setProvider] = useState("gemini");
+  const [model, setModel] = useState("gemini-3-flash-preview");
+  const [systemPrompt, setSystemPrompt] = useState("");
+  const [supportedModels, setSupportedModels] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const flatFiles = useMemo(() => flattenFiles(files), [files]);
   const selectedContext = selectedContextPaths ?? selectedContextInternal;
+
+  useEffect(() => {
+    let mounted = true;
+    const loadSettings = async () => {
+      setSettingsLoading(true);
+      try {
+        const response = await api.getChatSettings();
+        if (!mounted) return;
+        setProvider(response.provider);
+        setModel(response.model);
+        setSystemPrompt(response.system_prompt);
+        setSupportedModels(response.supported_models || []);
+      } catch (error) {
+        if (!mounted) return;
+        toast({
+          title: "Failed to load AI settings",
+          description: error instanceof Error ? error.message : "Could not fetch chat settings.",
+          variant: "destructive",
+        });
+      } finally {
+        if (mounted) {
+          setSettingsLoading(false);
+        }
+      }
+    };
+
+    loadSettings().catch(() => undefined);
+    return () => {
+      mounted = false;
+    };
+  }, [toast]);
 
   const toggleContext = (path: string) => {
     if (onToggleContextPath) {
@@ -196,6 +243,44 @@ export function AIChat({
     }
   };
 
+  const saveSettings = async () => {
+    if (settingsSaving) return;
+    if (!model.trim() || !systemPrompt.trim()) {
+      toast({
+        title: "Missing settings",
+        description: "Model and system prompt are required.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setSettingsSaving(true);
+    try {
+      const response = await api.updateChatSettings({
+        provider,
+        model,
+        system_prompt: systemPrompt,
+      });
+      setProvider(response.provider);
+      setModel(response.model);
+      setSystemPrompt(response.system_prompt);
+      setSupportedModels(response.supported_models || []);
+      setSettingsOpen(false);
+      toast({
+        title: "AI settings updated",
+        description: `${response.provider} / ${response.model}`,
+      });
+    } catch (error) {
+      toast({
+        title: "Could not save settings",
+        description: error instanceof Error ? error.message : "Request failed.",
+        variant: "destructive",
+      });
+    } finally {
+      setSettingsSaving(false);
+    }
+  };
+
   return (
     <div className={cn("h-full flex flex-col bg-card", className)}>
       {/* Header */}
@@ -204,10 +289,101 @@ export function AIChat({
           <Bot className="h-4 w-4 text-muted-foreground" />
           <span className="text-xs font-medium">AI Assistant</span>
         </div>
-        <span className="text-[10px] text-muted-foreground">
-          Powered by AI
-        </span>
+        <div className="flex items-center gap-1.5">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => setSettingsOpen(true)}
+            aria-label="Open AI settings"
+          >
+            <Settings2 className="h-3.5 w-3.5" />
+          </Button>
+
+          <span className="text-[10px] text-muted-foreground">
+            {provider}:{model}
+          </span>
+        </div>
       </div>
+
+      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <DialogContent
+          className="w-[92vw] max-w-5xl h-[88vh] p-0 gap-0 flex flex-col"
+          showCloseButton={false}
+        >
+          <DialogHeader className="px-5 py-4 border-b border-border">
+            <DialogTitle className="text-base">AI Settings</DialogTitle>
+            <DialogDescription>
+              Configure provider, model, and system prompt used for chat responses.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 min-h-0 p-5 overflow-hidden">
+            {settingsLoading ? (
+              <div className="text-sm text-muted-foreground">Loading settings...</div>
+            ) : (
+              <div className="h-full min-h-0 flex flex-col gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Provider</Label>
+                    <div className="h-9 px-3 rounded border border-input bg-muted/40 text-sm flex items-center">
+                      {provider}
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="chat-model" className="text-xs">Model</Label>
+                    <select
+                      id="chat-model"
+                      value={model}
+                      onChange={(event) => setModel(event.target.value)}
+                      className="h-9 w-full rounded border border-input bg-background px-3 text-sm"
+                    >
+                      {supportedModels.length === 0 ? (
+                        <option value={model}>{model}</option>
+                      ) : (
+                        supportedModels.map((modelOption) => (
+                          <option key={modelOption} value={modelOption}>
+                            {modelOption}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex-1 min-h-0 space-y-1.5">
+                  <Label htmlFor="chat-system-prompt" className="text-xs">System prompt</Label>
+                  <Textarea
+                    id="chat-system-prompt"
+                    value={systemPrompt}
+                    onChange={(event) => setSystemPrompt(event.target.value)}
+                    className="h-full max-h-[60vh] min-h-[320px] resize-none overflow-y-auto text-xs"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="px-5 py-4 border-t border-border">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSettingsOpen(false)}
+              disabled={settingsSaving}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => saveSettings().catch(() => undefined)}
+              disabled={settingsSaving || settingsLoading}
+            >
+              {settingsSaving ? "Saving..." : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Messages */}
       <ScrollArea className="flex-1 p-4">

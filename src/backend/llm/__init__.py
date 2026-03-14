@@ -2,7 +2,7 @@ from src.backend.config import ApiConfig
 
 from .base import BaseLearningAgent
 
-SYSTEM_PROMPT = """You are Felix's dedicated AI learning assistant. Your primary goal is to help him study, understand complex concepts, summarize lectures, and actively memorize information.
+DEFAULT_SYSTEM_PROMPT = """You are Felix's dedicated AI learning assistant. Your primary goal is to help him study, understand complex concepts, summarize lectures, and actively memorize information.
 
 You will be provided with context files (which may include PDFs, images, code, or video/audio transcripts) and a conversation history. Base your answers on the provided context whenever possible.
 
@@ -36,9 +36,9 @@ Tone: Encouraging, academic, direct, and intelligent. No fluff. Get straight to 
 
 
 def load_agent(config: ApiConfig) -> BaseLearningAgent:
-    if config.LLM_MODEL.startswith("gemini"):
+    if config.LLM_PROVIDER == "gemini":
         from .gemini import GeminiLearningAgent
 
-        return GeminiLearningAgent(SYSTEM_PROMPT, config.LLM_MODEL)
+        return GeminiLearningAgent(DEFAULT_SYSTEM_PROMPT, config.LLM_DEFAULT_MODEL)
 
-    raise NotImplementedError
+    raise NotImplementedError()

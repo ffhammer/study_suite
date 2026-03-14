@@ -19,6 +19,77 @@ from src.backend.llm.base import (
 chat_router = APIRouter(prefix="/chat", tags=["chat"])
 
 
+class ChatSettingsResponse(BaseModel):
+    provider: str
+    model: str
+    system_prompt: str
+    supported_models: list[str]
+
+
+class UpdateChatSettingsRequest(BaseModel):
+    provider: str | None = None
+    model: str | None = None
+    system_prompt: str | None = None
+
+
+@chat_router.get("/settings", response_model=ChatSettingsResponse)
+async def get_chat_settings(request: Request) -> ChatSettingsResponse:
+    config: ApiConfig = request.app.state.config
+    settings: dict = request.app.state.chat_settings
+    return ChatSettingsResponse(
+        provider=settings["provider"],
+        model=settings["model"],
+        system_prompt=settings["system_prompt"],
+        supported_models=config.GEMINI_ALLOWED_MODELS,
+    )
+
+
+@chat_router.put("/settings", response_model=ChatSettingsResponse)
+async def update_chat_settings(
+    payload: UpdateChatSettingsRequest,
+    request: Request,
+) -> ChatSettingsResponse:
+    config: ApiConfig = request.app.state.config
+    settings: dict = request.app.state.chat_settings
+
+    if payload.provider is not None:
+        provider = payload.provider.strip().lower()
+        if provider != "gemini":
+            raise HTTPException(
+                status_code=400, detail="Only gemini provider is supported"
+            )
+        settings["provider"] = provider
+
+    if payload.model is not None:
+        model = payload.model.strip()
+        if not model:
+            raise HTTPException(status_code=400, detail="model cannot be empty")
+        if model not in config.GEMINI_ALLOWED_MODELS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported model '{model}'.",
+            )
+        settings["model"] = model
+
+    if payload.system_prompt is not None:
+        system_prompt = payload.system_prompt.strip()
+        if not system_prompt:
+            raise HTTPException(status_code=400, detail="system_prompt cannot be empty")
+        settings["system_prompt"] = system_prompt
+
+    agent = request.app.state.agent
+    if agent is not None:
+        agent.set_model_name(settings["model"])
+        agent.set_system_message(settings["system_prompt"])
+
+    return ChatSettingsResponse(
+        provider=settings["provider"],
+        model=settings["model"],
+        system_prompt=settings["system_prompt"],
+        supported_models=config.GEMINI_ALLOWED_MODELS,
+    )
+
+
 @chat_router.get("/conversations/")
 async def get_conversations(request: Request, course_name: Optional[str] = None):
     db: DataBase = request.app.state.db

@@ -58,6 +58,13 @@ export interface ChatEndpointResponse {
   actions: ChatActionPayload;
 }
 
+export interface ChatSettingsResponse {
+  provider: string;
+  model: string;
+  system_prompt: string;
+  supported_models: string[];
+}
+
 export interface AnkiCard {
   id: string;
   easiness_factor: number;
@@ -269,6 +276,21 @@ export const api = {
     }
 
     return (await response.json()) as ChatEndpointResponse;
+  },
+
+  getChatSettings() {
+    return fetchJSON<ChatSettingsResponse>("/chat/settings");
+  },
+
+  updateChatSettings(input: {
+    provider?: string;
+    model?: string;
+    system_prompt?: string;
+  }) {
+    return fetchJSON<ChatSettingsResponse>("/chat/settings", {
+      method: "PUT",
+      body: JSON.stringify(input),
+    });
   },
 
   getDueCards(courseName: string) {

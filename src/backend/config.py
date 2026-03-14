@@ -17,7 +17,14 @@ class ApiConfig(BaseSettings):
     VIDEO_SUFFIXES: list[str] = [".mp4", ".mkv", ".mov"]
     AUDIO_SUFFIXES: list[str] = [".mp3", ".wav", ".m4a"]
     IMG_SUFFIXES: list[str] = [".png"]
-    LLM_MODEL: str = "gemini"  # the llm factory
+    LLM_PROVIDER: str = "gemini"
+    LLM_DEFAULT_MODEL: str = "gemini-3-flash-preview"
+    GEMINI_ALLOWED_MODELS: list[str] = [
+        "gemini-3-flash-preview",
+        "gemini-2.5-flash",
+        "gemini-2.5-pro",
+        "gemini-3.1-flash-lite-preview",
+    ]
 
     @property
     def DATABASE_URL(self):

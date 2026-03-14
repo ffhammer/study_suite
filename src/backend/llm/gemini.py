@@ -56,7 +56,11 @@ class GeminiLearningAgent(BaseLearningAgent):
                 # Safe decoding for text-based files
                 try:
                     text_content = file_bytes.decode("utf-8")
-                    context_parts.append(f"\n[File: {path.name}]\n{text_content}\n")
+                    context_parts.append(
+                        types.Part.from_text(
+                            text=f"\n[File: {path.name}]\n{text_content}\n"
+                        )
+                    )
                 except UnicodeDecodeError:
                     # Skip binary files that aren't images/PDFs
                     continue

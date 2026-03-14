@@ -3,6 +3,7 @@ from typing import Optional
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel
+from sqlalchemy import JSON
 from sqlmodel import Column, Field, ForeignKey, Relationship, SQLModel, String
 
 
@@ -31,6 +32,9 @@ class ResourceMeta(SQLModel, table=True):
     )  # e.g., "CourseA/Lecture1/audio.mp3"
     is_transcribed: bool = Field(default=False)
     transcript_text: Optional[str] = None
+    transcript_segments: Optional[list[dict]] = Field(
+        default=None, sa_column=Column(JSON, nullable=True)
+    )
 
     # pass through types (Only filled in Tree, not Saved)
 

@@ -36,12 +36,19 @@ export interface CourseConfig {
   is_active: boolean;
 }
 
+export interface TranscriptSegment {
+  start: number;
+  end: number;
+  text: string;
+}
+
 export interface ResourceMeta {
   id?: string;
   course: string;
   relative_path: string;
   is_transcribed?: boolean;
   transcript_text?: string | null;
+  transcript_segments?: TranscriptSegment[] | null;
   last_processed?: string | null;
   size?: number | null;
 }

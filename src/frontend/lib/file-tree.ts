@@ -1,5 +1,11 @@
 import { ResourceMeta } from "@/lib/api";
 
+export interface TranscriptSegment {
+  start: number;
+  end: number;
+  text: string;
+}
+
 export type WorkspaceFileType = "folder" | "file" | "media" | "pdf" | "binary";
 
 export interface WorkspaceFileItem {
@@ -11,6 +17,7 @@ export interface WorkspaceFileItem {
   size?: number;
   lastProcessed?: string | null;
   transcriptText?: string | null;
+  transcriptSegments?: TranscriptSegment[] | null;
 }
 
 const mediaExtensions = new Set([
@@ -129,6 +136,7 @@ export function buildTree(resources: ResourceMeta[]): WorkspaceFileItem[] {
       size: item.size ?? undefined,
       lastProcessed: item.last_processed ?? null,
       transcriptText: item.transcript_text ?? null,
+      transcriptSegments: item.transcript_segments ?? null,
     };
 
     if (parentParts.length === 0) {

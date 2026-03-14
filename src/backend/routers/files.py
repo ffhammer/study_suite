@@ -1,9 +1,11 @@
 import asyncio
 import mimetypes
+import re
 import shutil
 import tempfile
 from datetime import datetime
 from pathlib import Path
+from uuid import uuid4
 
 from fastapi import (
     APIRouter,
@@ -24,6 +26,47 @@ from src.backend.database.models import ResourceMeta, TextUpdate
 from src.backend.transcription import extract_audio_sync, run_whisper_sync
 
 file_router = APIRouter(prefix="/files", tags=["files"])
+
+
+TIMESTAMP_LINE_PATTERN = re.compile(
+    r"^\s*\[(\d{1,2}:\d{2}(?::\d{2})?)\]\s*(.*?)\s*$"
+)
+
+
+def _parse_clock_to_seconds(clock: str) -> int:
+    parts = [int(part) for part in clock.split(":")]
+    if len(parts) == 2:
+        minutes, seconds = parts
+        return minutes * 60 + seconds
+    hours, minutes, seconds = parts
+    return hours * 3600 + minutes * 60 + seconds
+
+
+def _parse_timestamped_transcript(text: str, fallback_window_seconds: float) -> list[dict] | None:
+    starts_and_texts: list[tuple[float, str]] = []
+    for raw_line in text.splitlines():
+        match = TIMESTAMP_LINE_PATTERN.match(raw_line)
+        if not match:
+            continue
+        start = float(_parse_clock_to_seconds(match.group(1)))
+        value = match.group(2).strip()
+        if not value:
+            continue
+        starts_and_texts.append((start, value))
+
+    if not starts_and_texts:
+        return None
+
+    segments: list[dict] = []
+    for index, (start, value) in enumerate(starts_and_texts):
+        if index + 1 < len(starts_and_texts):
+            next_start = starts_and_texts[index + 1][0]
+            end = max(start + 0.5, next_start)
+        else:
+            end = start + max(1.0, float(fallback_window_seconds))
+        segments.append({"start": start, "end": end, "text": value})
+
+    return segments
 
 
 class MoveItemPayload(BaseModel):
@@ -92,6 +135,7 @@ async def edit_transcribed_text_put(
 ) -> ResourceMeta:
     """Updates transcribed text via JSON body (preferred over query-string GET)."""
     db: DataBase = request.app.state.db
+    config: ApiConfig = request.app.state.config
     logger.info(
         "manual transcript edit (PUT): course={}, rel_path={}", course_name, rel_path
     )
@@ -109,6 +153,11 @@ async def edit_transcribed_text_put(
         raise HTTPException(status_code=404, detail="File not found")
 
     meta.transcript_text = data.content
+    parsed_segments = _parse_timestamped_transcript(
+        data.content,
+        fallback_window_seconds=config.TRANSCRIPT_CHUNK_TARGET_SECONDS,
+    )
+    meta.transcript_segments = parsed_segments
     await db.save(meta)
     return meta
 
@@ -457,29 +506,37 @@ async def background_transcription_worker(
     job_id = f"{course_name}/{rel_path}"
     file_path = config.save_join_file_path(course_name, rel_path)
     audio_path = file_path
+    temp_audio_path: Path | None = None
     logger.info("transcription worker started: job_id={}", job_id)
 
     try:
         # Step 1: Handle Video -> Audio Extraction
         if file_path.suffix in config.VIDEO_SUFFIXES:
             jobs_dict[job_id]["status"] = "extracting_audio"
-            audio_path = file_path.with_suffix(".mp3")
+            temp_dir = Path(tempfile.gettempdir()) / "study_suite_transcription"
+            temp_dir.mkdir(parents=True, exist_ok=True)
+            temp_audio_path = temp_dir / f"{uuid4().hex}.mp3"
+            audio_path = temp_audio_path
             logger.debug(
-                "transcription extracting audio: job_id={}, source={}",
+                "transcription extracting audio: job_id={}, source={}, temp_audio={}",
                 job_id,
                 file_path,
+                audio_path,
             )
-
-            if not audio_path.exists():
-                await asyncio.to_thread(extract_audio_sync, file_path, audio_path)
+            await asyncio.to_thread(extract_audio_sync, file_path, audio_path)
 
         # Step 2: Run Transcription
         jobs_dict[job_id]["status"] = "starting_whisper"
         logger.debug(
             "transcription whisper start: job_id={}, audio_path={}", job_id, audio_path
         )
-        final_text = await asyncio.to_thread(
-            run_whisper_sync, audio_path, job_id, jobs_dict
+        transcription_result = await asyncio.to_thread(
+            run_whisper_sync,
+            audio_path,
+            job_id,
+            jobs_dict,
+            config.TRANSCRIPT_CHUNK_TARGET_SECONDS,
+            config.TRANSCRIPT_CHUNK_MAX_GAP_SECONDS,
         )
 
         # Step 3: Save to Database
@@ -494,21 +551,20 @@ async def background_transcription_worker(
             mode="first",
         )
         if meta:
-            meta.transcript_text = final_text
+            meta.transcript_text = transcription_result["timestamped_text"]
+            meta.transcript_segments = transcription_result["segments"]
+            meta.is_transcribed = True
             await db.save(meta)
             logger.debug(
-                "transcription text persisted: job_id={}, chars={}",
+                "transcription text persisted: job_id={}, chars={}, segments={}",
                 job_id,
-                len(final_text),
+                len(transcription_result["timestamped_text"]),
+                len(transcription_result["segments"]),
             )
 
         # Step 4: Cleanup
         jobs_dict[job_id]["status"] = "completed"
         jobs_dict[job_id]["progress"] = jobs_dict[job_id]["total"]
-
-        # If we created a temporary audio file from a video, delete it to save space
-        if file_path.suffix in config.VIDEO_SUFFIXES and audio_path.exists():
-            audio_path.unlink()
 
         logger.info("transcription completed: job_id={}", job_id)
 
@@ -516,6 +572,16 @@ async def background_transcription_worker(
         logger.error(f"Transcription failed for {job_id}: {e}")
         jobs_dict[job_id]["status"] = "failed"
         jobs_dict[job_id]["error"] = str(e)
+    finally:
+        if temp_audio_path and temp_audio_path.exists():
+            try:
+                temp_audio_path.unlink()
+            except Exception as cleanup_error:
+                logger.warning(
+                    "transcription temp cleanup failed: path={}, error={}",
+                    temp_audio_path,
+                    cleanup_error,
+                )
 
 
 @file_router.post("/transcribe/{course_name}/{rel_path:path}")

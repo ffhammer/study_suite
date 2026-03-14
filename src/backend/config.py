@@ -25,6 +25,8 @@ class ApiConfig(BaseSettings):
         "gemini-2.5-pro",
         "gemini-3.1-flash-lite-preview",
     ]
+    TRANSCRIPT_CHUNK_TARGET_SECONDS: float = 15.0
+    TRANSCRIPT_CHUNK_MAX_GAP_SECONDS: float = 5.0
 
     @property
     def DATABASE_URL(self):

@@ -1,4 +1,5 @@
 import re
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -15,6 +16,7 @@ from src.backend.database.models import (
     ChatMessage,
     ChatMessageImage,
     ChatSession,
+    ResourceMeta,
 )
 from src.backend.llm.base import (
     ChatEndpointResponse,
@@ -283,11 +285,51 @@ async def get_response(
     # Resolve selected context files to absolute paths in the course vault.
     selected_context_files = context_files or []
     context_paths: list[Path] = []
+    temp_context_paths: list[Path] = []
     if session_course:
         context_paths = [
             config.save_join_file_path(session_course, rel_path)
             for rel_path in selected_context_files
         ]
+
+        media_suffixes = {
+            suffix.lower() for suffix in (config.AUDIO_SUFFIXES + config.VIDEO_SUFFIXES)
+        }
+        media_rel_paths = [
+            rel_path
+            for rel_path in selected_context_files
+            if Path(rel_path).suffix.lower() in media_suffixes
+        ]
+
+        if media_rel_paths:
+            media_metas = await db.query_table(
+                ResourceMeta,
+                where_clauses=[
+                    ResourceMeta.course == session_course,
+                    ResourceMeta.relative_path.in_(media_rel_paths),
+                ],
+                mode="all",
+            )
+
+            transcript_by_path = {
+                meta.relative_path: meta.transcript_text
+                for meta in media_metas
+                if meta.transcript_text and meta.transcript_text.strip()
+            }
+
+            for rel_path in media_rel_paths:
+                transcript = transcript_by_path.get(rel_path)
+                if not transcript:
+                    continue
+                fd, temp_path = tempfile.mkstemp(
+                    prefix="study_suite_transcript_", suffix=".txt"
+                )
+                with open(fd, "w", encoding="utf-8") as temp_file:
+                    temp_file.write(f"[Transcript Source: {rel_path}]\n")
+                    temp_file.write(transcript)
+                temp_context_path = Path(temp_path)
+                context_paths.append(temp_context_path)
+                temp_context_paths.append(temp_context_path)
 
     session.last_message = datetime.utcnow()
     await db.save(session)
@@ -307,28 +349,35 @@ async def get_response(
         mode="first",
     )
 
-    response = await agent.get_answer(
-        session=session,
-        new_message=user_msg,
-        context_paths=context_paths,
-        existing_cards=[
-            SimpleAnkiCard(
-                a_content=card.a_content,
-                b_content=card.b_content,
-                notes=card.notes,
-                is_question=card.is_question,
-            )
-            for card in (
-                await db.query_table(
-                    AnkiCard,
-                    where_clauses=[AnkiCard.course == session_course],
+    try:
+        response = await agent.get_answer(
+            session=session,
+            new_message=user_msg,
+            context_paths=context_paths,
+            existing_cards=[
+                SimpleAnkiCard(
+                    a_content=card.a_content,
+                    b_content=card.b_content,
+                    notes=card.notes,
+                    is_question=card.is_question,
                 )
-                if session_course and include_existing_anki_cards
-                else []
-            )
-        ],
-        anki_feedback=anki_feedback,
-    )
+                for card in (
+                    await db.query_table(
+                        AnkiCard,
+                        where_clauses=[AnkiCard.course == session_course],
+                    )
+                    if session_course and include_existing_anki_cards
+                    else []
+                )
+            ],
+            anki_feedback=anki_feedback,
+        )
+    finally:
+        for temp_context_path in temp_context_paths:
+            try:
+                temp_context_path.unlink(missing_ok=True)
+            except Exception:
+                pass
 
     if isinstance(response, str):
         # We don't save the model response if there was an error message string returned

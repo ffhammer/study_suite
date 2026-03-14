@@ -616,94 +616,94 @@ export function CourseWorkspace({
   return (
     <>
       <ResizablePanelGroup direction="horizontal" className="h-full">
-      {showSidebar && (
-        <>
-          <ResizablePanel defaultSize={15} minSize={10} maxSize={35}>
-            <FileExplorer
-              files={files}
-              selectedFileId={selectedFile?.id || null}
-              selectedCourse={selectedCourse}
-              allowManagement
-              contextSelectionEnabled={contextSelectionEnabled}
-              selectedContextPaths={selectedContextPaths}
-              onToggleContextPath={onToggleContextPath}
-              onFileSelect={(file) => handleFileSelect(file, "primary")}
-              onRefresh={onRefreshFiles}
-            />
-          </ResizablePanel>
-          <ResizableHandle />
-        </>
-      )}
+        {showSidebar && (
+          <>
+            <ResizablePanel defaultSize={15} minSize={10} maxSize={35}>
+              <FileExplorer
+                files={files}
+                selectedFileId={selectedFile?.id || null}
+                selectedCourse={selectedCourse}
+                allowManagement
+                contextSelectionEnabled={contextSelectionEnabled}
+                selectedContextPaths={selectedContextPaths}
+                onToggleContextPath={onToggleContextPath}
+                onFileSelect={(file) => handleFileSelect(file, "primary")}
+                onRefresh={onRefreshFiles}
+              />
+            </ResizablePanel>
+            <ResizableHandle />
+          </>
+        )}
 
-      <ResizablePanel defaultSize={showSidebar ? 85 : 100}>
-        <div className="h-full min-h-0">
-          {splitScreen ? (
-            <ResizablePanelGroup direction="horizontal" className="h-full">
-              <ResizablePanel defaultSize={50}>{renderPrimaryContent()}</ResizablePanel>
-              <ResizableHandle withHandle />
-              <ResizablePanel defaultSize={50}>
-                <div className="h-full flex flex-col">
-                  <div className="h-7 border-b border-border flex items-center justify-between px-2 bg-muted/20 shrink-0">
-                    <div className="flex items-center gap-2 overflow-hidden">
-                      <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider shrink-0">Secondary Panel</span>
-                      {secondaryFile && (
-                        <span className="text-xs text-foreground truncate font-medium border-l border-border pl-2">{secondaryFile.name}</span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <button
-                            type="button"
-                            className="h-5 w-5 inline-flex items-center justify-center rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                            title="Open file in secondary panel"
-                          >
-                            <FilePlus2 className="h-3 w-3" />
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-64 p-0" align="end">
-                          <div className="p-2 border-b border-border bg-muted/30">
-                            <p className="text-[10px] font-medium uppercase text-muted-foreground">Select file for Right Panel</p>
-                          </div>
-                          <ScrollArea className="h-72">
-                            <div className="p-1">
-                              {flatFiles
-                                .filter(item => item.file.type !== "folder")
-                                .map(({ file, path }) => (
-                                  <button
-                                    key={file.id}
-                                    className="w-full text-left px-2 py-1.5 text-xs rounded-sm hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
-                                    onClick={() => {
-                                      handleFileSelect(file, "secondary");
-                                    }}
-                                  >
-                                    <FileText className="h-3 w-3 shrink-0 opacity-70" />
-                                    <span className="truncate">{path}</span>
-                                  </button>
-                                ))}
+        <ResizablePanel defaultSize={showSidebar ? 85 : 100}>
+          <div className="h-full min-h-0">
+            {splitScreen ? (
+              <ResizablePanelGroup direction="horizontal" className="h-full">
+                <ResizablePanel defaultSize={50}>{renderPrimaryContent()}</ResizablePanel>
+                <ResizableHandle withHandle />
+                <ResizablePanel defaultSize={50}>
+                  <div className="h-full flex flex-col">
+                    <div className="h-7 border-b border-border flex items-center justify-between px-2 bg-muted/20 shrink-0">
+                      <div className="flex items-center gap-2 overflow-hidden">
+                        <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider shrink-0">Secondary Panel</span>
+                        {secondaryFile && (
+                          <span className="text-xs text-foreground truncate font-medium border-l border-border pl-2">{secondaryFile.name}</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <button
+                              type="button"
+                              className="h-5 w-5 inline-flex items-center justify-center rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                              title="Open file in secondary panel"
+                            >
+                              <FilePlus2 className="h-3 w-3" />
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-64 p-0" align="end">
+                            <div className="p-2 border-b border-border bg-muted/30">
+                              <p className="text-[10px] font-medium uppercase text-muted-foreground">Select file for Right Panel</p>
                             </div>
-                          </ScrollArea>
-                        </PopoverContent>
-                      </Popover>
-                      <button
-                        type="button"
-                        className="h-5 w-5 inline-flex items-center justify-center rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                        onClick={() => setSplitScreen(false)}
-                        title="Close split view"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
+                            <ScrollArea className="h-72">
+                              <div className="p-1">
+                                {flatFiles
+                                  .filter(item => item.file.type !== "folder")
+                                  .map(({ file, path }) => (
+                                    <button
+                                      key={file.id}
+                                      className="w-full text-left px-2 py-1.5 text-xs rounded-sm hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                                      onClick={() => {
+                                        handleFileSelect(file, "secondary");
+                                      }}
+                                    >
+                                      <FileText className="h-3 w-3 shrink-0 opacity-70" />
+                                      <span className="truncate">{path}</span>
+                                    </button>
+                                  ))}
+                              </div>
+                            </ScrollArea>
+                          </PopoverContent>
+                        </Popover>
+                        <button
+                          type="button"
+                          className="h-5 w-5 inline-flex items-center justify-center rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                          onClick={() => setSplitScreen(false)}
+                          title="Close split view"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
                     </div>
+                    <div className="flex-1 min-h-0">{renderFileContent(secondaryFile)}</div>
                   </div>
-                  <div className="flex-1 min-h-0">{renderFileContent(secondaryFile)}</div>
-                </div>
-              </ResizablePanel>
-            </ResizablePanelGroup>
-          ) : (
-            renderPrimaryContent()
-          )}
-        </div>
-      </ResizablePanel>
+                </ResizablePanel>
+              </ResizablePanelGroup>
+            ) : (
+              renderPrimaryContent()
+            )}
+          </div>
+        </ResizablePanel>
       </ResizablePanelGroup>
 
       <Dialog

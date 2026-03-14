@@ -11,6 +11,7 @@ import {
   Trash2,
   FilePlus2,
   FolderPlus,
+  Download,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { WorkspaceFileItem, formatBytes } from "@/lib/file-tree";
@@ -49,6 +50,8 @@ interface FileTreeItemProps {
   depth: number;
   selectedFileId: string | null;
   onFileSelect: (file: WorkspaceFileItem) => void;
+  canDownload: boolean;
+  onDownload: (item: WorkspaceFileItem) => void;
   allowManagement: boolean;
   onRename: (item: WorkspaceFileItem) => void;
   onDelete: (item: WorkspaceFileItem) => void;
@@ -61,6 +64,8 @@ function FileTreeItem({
   depth,
   selectedFileId,
   onFileSelect,
+  canDownload,
+  onDownload,
   allowManagement,
   onRename,
   onDelete,
@@ -76,7 +81,9 @@ function FileTreeItem({
 
   return (
     <div>
-      <button
+      <div
+        role="button"
+        tabIndex={0}
         draggable={isDraggable}
         onDragStart={(event) => {
           if (!itemPath) return;
@@ -105,8 +112,17 @@ function FileTreeItem({
             onFileSelect(item);
           }
         }}
+        onKeyDown={(event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          if (isFolder) {
+            setIsExpanded((prev) => !prev);
+          } else {
+            onFileSelect(item);
+          }
+        }}
         className={cn(
-          "w-full flex items-center gap-1 py-1 px-2 text-sm hover:bg-accent/50 rounded-sm transition-colors group",
+          "w-full flex items-center gap-1 py-1 px-2 text-sm hover:bg-accent/50 rounded-sm transition-colors group cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
           isSelected && "bg-accent"
         )}
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
@@ -135,6 +151,19 @@ function FileTreeItem({
         )}
         {allowManagement && itemPath && (
           <div className="ml-2 flex items-center gap-1">
+            {canDownload && !isFolder && (
+              <button
+                type="button"
+                className="h-5 w-5 inline-flex items-center justify-center rounded hover:bg-accent/60"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onDownload(item);
+                }}
+                aria-label="Download file"
+              >
+                <Download className="h-3 w-3 text-muted-foreground" />
+              </button>
+            )}
             <button
               type="button"
               className="h-5 w-5 inline-flex items-center justify-center rounded hover:bg-accent/60"
@@ -159,7 +188,7 @@ function FileTreeItem({
             </button>
           </div>
         )}
-      </button>
+      </div>
       {isFolder && isExpanded && item.children && (
         <div>
           {item.children.map((child) => (
@@ -169,6 +198,8 @@ function FileTreeItem({
               depth={depth + 1}
               selectedFileId={selectedFileId}
               onFileSelect={onFileSelect}
+              canDownload={canDownload}
+              onDownload={onDownload}
               allowManagement={allowManagement}
               onRename={onRename}
               onDelete={onDelete}
@@ -289,6 +320,12 @@ export function FileExplorer({
     }
   };
 
+  const downloadItem = (item: WorkspaceFileItem) => {
+    if (!selectedCourse || !item.relativePath || item.type === "folder") return;
+    const url = api.getDownloadFileUrl(selectedCourse, item.relativePath);
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
   return (
     <div className="h-full flex flex-col bg-sidebar">
       <div className="h-9 border-b border-border flex items-center justify-between px-3 shrink-0">
@@ -334,6 +371,8 @@ export function FileExplorer({
               depth={0}
               selectedFileId={selectedFileId}
               onFileSelect={onFileSelect}
+              canDownload={Boolean(selectedCourse && item.type !== "folder")}
+              onDownload={downloadItem}
               allowManagement={allowManagement}
               onRename={(target) => {
                 renameItem(target).catch(() => undefined);

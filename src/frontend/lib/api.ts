@@ -230,6 +230,10 @@ export const api = {
     return `${API_BASE_URL}/files/raw/${encodeURIComponent(courseName)}/${encodeURI(relativePath)}`;
   },
 
+  getDownloadFileUrl(courseName: string, relativePath: string) {
+    return `${API_BASE_URL}/files/raw/${encodeURIComponent(courseName)}/${encodeURI(relativePath)}?download=true`;
+  },
+
   async sendChatMessage(input: {
     content: string;
     courseName: string;

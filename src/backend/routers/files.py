@@ -32,7 +32,9 @@ class MoveItemPayload(BaseModel):
 
 
 @file_router.get("/raw/{course_name}/{rel_path:path}")
-async def get_raw_file(course_name: str, rel_path: str, request: Request):
+async def get_raw_file(
+    course_name: str, rel_path: str, request: Request, download: bool = False
+):
     config: ApiConfig = request.app.state.config
     logger.debug("raw file requested: course={}, rel_path={}", course_name, rel_path)
 
@@ -44,11 +46,13 @@ async def get_raw_file(course_name: str, rel_path: str, request: Request):
     # Guess the media type (e.g., 'video/mp4' or 'audio/mpeg')
     mime_type, _ = mimetypes.guess_type(file_path)
 
+    disposition = "attachment" if download else "inline"
+
     return FileResponse(
         path=file_path,
         media_type=mime_type or "application/octet-stream",
         filename=file_path.name,
-        headers={"Content-Disposition": f'inline; filename="{file_path.name}"'},
+        headers={"Content-Disposition": f'{disposition}; filename="{file_path.name}"'},
     )
 
 

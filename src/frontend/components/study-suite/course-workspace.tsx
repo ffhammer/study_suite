@@ -350,6 +350,8 @@ export function CourseWorkspace({
             <FileExplorer
               files={files}
               selectedFileId={selectedFile?.id || null}
+              selectedCourse={selectedCourse}
+              allowManagement
               onFileSelect={handleFileSelect}
               onRefresh={onRefreshFiles}
             />

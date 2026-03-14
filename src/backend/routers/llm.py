@@ -9,11 +9,17 @@ from sqlalchemy.orm import selectinload
 
 from src.backend.config import ApiConfig
 from src.backend.database.db import DataBase
-from src.backend.database.models import ChatMessage, ChatMessageImage, ChatSession
+from src.backend.database.models import (
+    AnkiCard,
+    ChatMessage,
+    ChatMessageImage,
+    ChatSession,
+)
 from src.backend.llm.base import (
     ChatEndpointResponse,
     ChatResponseMessage,
     ChatResponseMetadata,
+    SimpleAnkiCard,
 )
 
 chat_router = APIRouter(prefix="/chat", tags=["chat"])
@@ -183,6 +189,8 @@ async def get_response(
     course_name: Optional[str] = Form(None),
     context_files: list[str] = Form([]),
     images: list[UploadFile] = File([]),
+    anki_feedback: Optional[str] = Form(None),
+    include_existing_anki_cards: bool = Form(False),
 ) -> ChatEndpointResponse:
     db: DataBase = request.app.state.db
     config: ApiConfig = request.app.state.config
@@ -279,6 +287,23 @@ async def get_response(
         session=session,
         new_message=user_msg,
         context_paths=context_paths,
+        existing_cards=[
+            SimpleAnkiCard(
+                a_content=card.a_content,
+                b_content=card.b_content,
+                notes=card.notes,
+                is_question=card.is_question,
+            )
+            for card in (
+                await db.query_table(
+                    AnkiCard,
+                    where_clauses=[AnkiCard.course == session_course],
+                )
+                if session_course and include_existing_anki_cards
+                else []
+            )
+        ],
+        anki_feedback=anki_feedback,
     )
 
     if isinstance(response, str):

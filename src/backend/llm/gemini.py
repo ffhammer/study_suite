@@ -12,7 +12,7 @@ from loguru import logger
 
 from src.backend.database.models import ChatMessage, ChatSession
 
-from .base import BaseLearningAgent, LLMResponse
+from .base import BaseLearningAgent, LLMResponse, SimpleAnkiCard
 
 
 class GeminiLearningAgent(BaseLearningAgent):
@@ -31,6 +31,8 @@ class GeminiLearningAgent(BaseLearningAgent):
         session: ChatSession | None,
         new_message: ChatMessage,
         context_paths: List[Path] = [],
+        existing_cards: List[SimpleAnkiCard] | None = None,
+        anki_feedback: str | None = None,
     ) -> LLMResponse | str:
         # 3. Build dynamic Part objects for Context (PDFs as inline 64-bit & High-Res Images)
         # We process these directly into SDK Part objects instead of long concatenated strings
@@ -104,6 +106,35 @@ class GeminiLearningAgent(BaseLearningAgent):
             # Inject selected context only with the latest user turn.
             if i == len(history) - 1 and role == "user":
                 parts.extend(context_parts)
+
+                if existing_cards:
+                    cards_lines = []
+                    for idx, card in enumerate(existing_cards, start=1):
+                        note = f" | Notes: {card.notes}" if card.notes else ""
+                        cards_lines.append(
+                            f"{idx}. Front: {card.a_content} | Back: {card.b_content}{note}"
+                        )
+                    parts.append(
+                        types.Part.from_text(
+                            text=(
+                                "\n[Existing Anki Cards For This Course]\n"
+                                "Do not generate duplicate cards of these entries.\n"
+                                + "\n".join(cards_lines)
+                                + "\n"
+                            )
+                        )
+                    )
+
+                if anki_feedback and anki_feedback.strip():
+                    parts.append(
+                        types.Part.from_text(
+                            text=(
+                                "\n[Anki Review Feedback From User]\n"
+                                "Use this to improve the next generated cards.\n"
+                                f"{anki_feedback.strip()}\n"
+                            )
+                        )
+                    )
 
             if msg.content:
                 parts.append(types.Part.from_text(text=msg.content))

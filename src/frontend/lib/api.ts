@@ -42,6 +42,13 @@ export interface ChatActionPayload {
   proposed_markdown?: string | null;
 }
 
+export interface GeneratedAnkiCard {
+  a_content: string;
+  b_content: string;
+  notes?: string | null;
+  is_question: boolean;
+}
+
 export interface ChatEndpointResponse {
   session_id: string;
   conversation_id: string;
@@ -247,6 +254,8 @@ export const api = {
     contextFiles: string[];
     images?: File[];
     conversationId?: string;
+    ankiFeedback?: string;
+    includeExistingAnkiCards?: boolean;
   }) {
     const formData = new FormData();
     formData.append("content", input.content);
@@ -254,6 +263,17 @@ export const api = {
 
     if (input.conversationId) {
       formData.append("conversation_id", input.conversationId);
+    }
+
+    if (input.ankiFeedback?.trim()) {
+      formData.append("anki_feedback", input.ankiFeedback.trim());
+    }
+
+    if (input.includeExistingAnkiCards !== undefined) {
+      formData.append(
+        "include_existing_anki_cards",
+        String(input.includeExistingAnkiCards)
+      );
     }
 
     for (const relPath of input.contextFiles) {
@@ -276,6 +296,18 @@ export const api = {
     }
 
     return (await response.json()) as ChatEndpointResponse;
+  },
+
+  saveGeneratedCards(courseName: string, cards: GeneratedAnkiCard[]) {
+    return fetchJSON<void>("/anki/cards", {
+      method: "POST",
+      body: JSON.stringify(
+        cards.map((card) => ({
+          ...card,
+          course: courseName,
+        }))
+      ),
+    });
   },
 
   getChatSettings() {

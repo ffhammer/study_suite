@@ -94,9 +94,12 @@ class BaseLearningAgent(ABC):
         session: "ChatSession | None",
         new_message: "ChatMessage",
         context_paths: List[Path] = [],
+        existing_cards: List[SimpleAnkiCard] | None = None,
+        anki_feedback: Optional[str] = None,
     ) -> LLMResponse | str:
         """
         Takes the selected files and the chat history,
         returns a structured LLMResponse or a string error message.
+        existing_cards and anki_feedback provide Anki workflow context.
         """
         pass

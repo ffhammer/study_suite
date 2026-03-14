@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Send, Paperclip, Bot, User, X, FileText, Check, ImagePlus, Settings2 } from "lucide-react";
+import { Send, Paperclip, Bot, User, X, FileText, Check, ImagePlus, Settings2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -20,11 +20,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { api } from "@/lib/api";
+import { api, GeneratedAnkiCard } from "@/lib/api";
 import { flattenFiles, WorkspaceFileItem } from "@/lib/file-tree";
 import { useToast } from "@/hooks/use-toast";
 import { Label } from "@/components/ui/label";
 import { MarkdownContent } from "@/components/ui/markdown-content";
+import { Input } from "@/components/ui/input";
 
 interface AIChatProps {
   className?: string;
@@ -43,6 +44,11 @@ interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   timestamp: string;
+}
+
+interface PendingAnkiCard extends GeneratedAnkiCard {
+  id: string;
+  selected: boolean;
 }
 
 function MessageBubble({ message }: { message: ChatMessage }) {
@@ -110,6 +116,11 @@ export function AIChat({
   const [model, setModel] = useState("gemini-3-flash-preview");
   const [systemPrompt, setSystemPrompt] = useState("");
   const [supportedModels, setSupportedModels] = useState<string[]>([]);
+  const [ankiReviewOpen, setAnkiReviewOpen] = useState(false);
+  const [pendingAnkiCards, setPendingAnkiCards] = useState<PendingAnkiCard[]>([]);
+  const [isApplyingAnkiCards, setIsApplyingAnkiCards] = useState(false);
+  const [pendingAnkiFeedback, setPendingAnkiFeedback] = useState<string | undefined>(undefined);
+  const [includeExistingAnkiCards, setIncludeExistingAnkiCards] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -189,7 +200,11 @@ export function AIChat({
         contextFiles: selectedContext,
         images: selectedImages,
         conversationId,
+        ankiFeedback: pendingAnkiFeedback,
+        includeExistingAnkiCards,
       });
+
+      setPendingAnkiFeedback(undefined);
 
       setConversationId(response.conversation_id);
       setSelectedImages([]);
@@ -205,11 +220,19 @@ export function AIChat({
       ]);
 
       if (response.actions.action_type === "NewAnkiCards") {
-        const count = response.actions.new_cards?.length || 0;
-        toast({
-          title: "New Anki cards suggested",
-          description: `${count} card${count === 1 ? "" : "s"} ready to save.`,
-        });
+        const proposed = (response.actions.new_cards || []).map((card) => ({
+          id: crypto.randomUUID(),
+          selected: true,
+          a_content: card.a_content,
+          b_content: card.b_content,
+          notes: card.notes || "",
+          is_question: card.is_question,
+        }));
+
+        if (proposed.length > 0) {
+          setPendingAnkiCards(proposed);
+          setAnkiReviewOpen(true);
+        }
       }
 
       if (response.actions.action_type === "SummaryEdit") {
@@ -238,6 +261,64 @@ export function AIChat({
       });
     } finally {
       setIsSending(false);
+    }
+  };
+
+  const applyAnkiCards = async () => {
+    if (!selectedCourse || isApplyingAnkiCards) return;
+
+    const selected = pendingAnkiCards.filter((card) => card.selected);
+    const deletedCount = pendingAnkiCards.length - selected.length;
+
+    if (selected.length === 0) {
+      setPendingAnkiFeedback(
+        `Anki card review result: accepted 0 cards and deleted ${deletedCount} cards.`
+      );
+      setAnkiReviewOpen(false);
+      setPendingAnkiCards([]);
+      toast({
+        title: "No cards accepted",
+        description: "The agent will receive this review feedback on your next message.",
+      });
+      return;
+    }
+
+    setIsApplyingAnkiCards(true);
+    try {
+      await api.saveGeneratedCards(
+        selectedCourse,
+        selected.map(({ a_content, b_content, notes, is_question }) => ({
+          a_content,
+          b_content,
+          notes: notes || null,
+          is_question,
+        }))
+      );
+
+      setPendingAnkiFeedback(
+        [
+          `Anki card review result: accepted ${selected.length} cards and deleted ${deletedCount} cards.`,
+          "Accepted cards:",
+          ...selected.map(
+            (card, idx) => `${idx + 1}. Front: ${card.a_content} | Back: ${card.b_content}`
+          ),
+        ].join("\n")
+      );
+
+      setAnkiReviewOpen(false);
+      setPendingAnkiCards([]);
+      toast({
+        title: "Anki cards saved",
+        description: `${selected.length} card${selected.length === 1 ? "" : "s"} saved. Feedback queued for next chat turn.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Failed to save Anki cards",
+        description: error instanceof Error ? error.message : "Request failed.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsApplyingAnkiCards(false);
     }
   };
 
@@ -288,6 +369,15 @@ export function AIChat({
           <span className="text-xs font-medium">AI Assistant</span>
         </div>
         <div className="flex items-center gap-1.5">
+          <Button
+            variant={includeExistingAnkiCards ? "secondary" : "outline"}
+            size="sm"
+            className="h-7 px-2 text-[10px]"
+            onClick={() => setIncludeExistingAnkiCards((prev) => !prev)}
+            title="Toggle sending existing Anki cards as context"
+          >
+            Cards: {includeExistingAnkiCards ? "On" : "Off"}
+          </Button>
           <Button
             variant="ghost"
             size="icon"
@@ -378,6 +468,140 @@ export function AIChat({
               disabled={settingsSaving || settingsLoading}
             >
               {settingsSaving ? "Saving..." : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={ankiReviewOpen} onOpenChange={setAnkiReviewOpen}>
+        <DialogContent className="w-[96vw] max-w-5xl h-[86vh] p-0 gap-0 flex flex-col" showCloseButton={false}>
+          <DialogHeader className="px-5 py-4 border-b border-border">
+            <DialogTitle className="text-base">Review New Anki Cards</DialogTitle>
+            <DialogDescription>
+              Edit, accept, or delete generated cards before saving.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="px-5 py-3 border-b border-border text-xs text-muted-foreground">
+            {pendingAnkiCards.filter((card) => card.selected).length} selected / {pendingAnkiCards.length} proposed
+          </div>
+
+          <ScrollArea className="flex-1 min-h-0">
+            <div className="p-4 space-y-3">
+              {pendingAnkiCards.map((card) => (
+                <div key={card.id} className="rounded-md border border-border p-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs inline-flex items-center gap-2 text-muted-foreground">
+                      <input
+                        type="checkbox"
+                        checked={card.selected}
+                        onChange={(event) =>
+                          setPendingAnkiCards((prev) =>
+                            prev.map((item) =>
+                              item.id === card.id
+                                ? {
+                                    ...item,
+                                    selected: event.target.checked,
+                                  }
+                                : item
+                            )
+                          )
+                        }
+                      />
+                      Accept card
+                    </label>
+
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-destructive"
+                      onClick={() =>
+                        setPendingAnkiCards((prev) => prev.filter((item) => item.id !== card.id))
+                      }
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Front</Label>
+                      <Input
+                        value={card.a_content}
+                        onChange={(event) =>
+                          setPendingAnkiCards((prev) =>
+                            prev.map((item) =>
+                              item.id === card.id
+                                ? {
+                                    ...item,
+                                    a_content: event.target.value,
+                                  }
+                                : item
+                            )
+                          )
+                        }
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Back</Label>
+                      <Input
+                        value={card.b_content}
+                        onChange={(event) =>
+                          setPendingAnkiCards((prev) =>
+                            prev.map((item) =>
+                              item.id === card.id
+                                ? {
+                                    ...item,
+                                    b_content: event.target.value,
+                                  }
+                                : item
+                            )
+                          )
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Notes</Label>
+                    <Textarea
+                      rows={2}
+                      value={card.notes || ""}
+                      onChange={(event) =>
+                        setPendingAnkiCards((prev) =>
+                          prev.map((item) =>
+                            item.id === card.id
+                              ? {
+                                  ...item,
+                                  notes: event.target.value,
+                                }
+                              : item
+                          )
+                        )
+                      }
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+
+          <DialogFooter className="px-5 py-4 border-t border-border">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setAnkiReviewOpen(false)}
+              disabled={isApplyingAnkiCards}
+            >
+              Close
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => applyAnkiCards().catch(() => undefined)}
+              disabled={isApplyingAnkiCards}
+            >
+              {isApplyingAnkiCards ? "Applying..." : "Apply Selection"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -92,7 +92,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
       </Avatar>
       <div
         className={cn(
-          "max-w-[80%] rounded-lg px-3 py-2 text-sm",
+          "max-w-[80%] rounded-lg px-3 py-2 text-sm max-h-[46vh] overflow-auto break-words",
           isUser
             ? "bg-blue-600 text-white"
             : "bg-muted text-foreground"
@@ -142,19 +142,51 @@ export function AIChat({
   const [includeExistingAnkiCards, setIncludeExistingAnkiCards] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const messageRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const flatFiles = useMemo(() => flattenFiles(files), [files]);
   const selectedContext = selectedContextPaths ?? selectedContextInternal;
 
-  // Auto-scroll to bottom of messages
+  // Keep refs tidy as messages change.
   useEffect(() => {
-    if (scrollRef.current) {
-      const scrollContainer = scrollRef.current.querySelector('[data-radix-scroll-area-viewport]');
-      if (scrollContainer) {
-        scrollContainer.scrollTop = scrollContainer.scrollHeight;
+    const validIds = new Set(messages.map((message) => message.id));
+    for (const key of Object.keys(messageRefs.current)) {
+      if (!validIds.has(key)) {
+        delete messageRefs.current[key];
       }
     }
-  }, [messages, isSending]);
+  }, [messages]);
+
+  // Auto-scroll behavior:
+  // - user message: keep bottom in view
+  // - assistant message: jump to the start of that new answer
+  useEffect(() => {
+    if (messages.length === 0) return;
+    const viewport = scrollRef.current?.querySelector("[data-radix-scroll-area-viewport]") as HTMLElement | null;
+    if (!viewport) return;
+
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage.role === "assistant") {
+      const node = messageRefs.current[lastMessage.id];
+      if (node) {
+        viewport.scrollTo({
+          top: Math.max(0, node.offsetTop - 6),
+          behavior: "smooth",
+        });
+        return;
+      }
+    }
+
+    viewport.scrollTo({ top: viewport.scrollHeight, behavior: "smooth" });
+  }, [messages]);
+
+  // When request is in-flight, keep typing indicator visible.
+  useEffect(() => {
+    if (!isSending) return;
+    const viewport = scrollRef.current?.querySelector("[data-radix-scroll-area-viewport]") as HTMLElement | null;
+    if (!viewport) return;
+    viewport.scrollTo({ top: viewport.scrollHeight, behavior: "smooth" });
+  }, [isSending]);
 
   useEffect(() => {
     let mounted = true;
@@ -631,14 +663,21 @@ export function AIChat({
       </Dialog>
 
       {/* Messages */}
-      <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+      <ScrollArea className="flex-1 min-h-0 p-4" ref={scrollRef}>
         {messages.length === 0 && (
           <div className="text-xs text-muted-foreground">
             Ask a question to start the conversation.
           </div>
         )}
         {messages.map((message) => (
-          <MessageBubble key={message.id} message={message} />
+          <div
+            key={message.id}
+            ref={(node) => {
+              messageRefs.current[message.id] = node;
+            }}
+          >
+            <MessageBubble message={message} />
+          </div>
         ))}
         {isSending && (
           <div className="flex gap-3 mb-4 flex-row animate-pulse">

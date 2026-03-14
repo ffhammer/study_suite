@@ -17,6 +17,13 @@ import {
 import { cn } from "@/lib/utils";
 import { WorkspaceFileItem, formatBytes } from "@/lib/file-tree";
 import { Button } from "@/components/ui/button";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
@@ -86,6 +93,7 @@ function FileTreeItem({
 }: FileTreeItemProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const isFolder = item.type === "folder";
+  const canDownloadItem = canDownload && !isFolder;
   const isSelected = item.id === selectedFileId;
 
   const itemPath = item.relativePath;
@@ -96,128 +104,166 @@ function FileTreeItem({
 
   return (
     <div>
-      <div
-        role="button"
-        tabIndex={0}
-        draggable={isDraggable}
-        onDragStart={(event) => {
-          if (!itemPath) return;
-          event.dataTransfer.setData("text/plain", itemPath);
-          onDragStart(itemPath);
-        }}
-        onDragOver={(event) => {
-          if (!allowManagement || !isFolder || !itemPath) return;
-          event.preventDefault();
-        }}
-        onDrop={(event) => {
-          if (!allowManagement || !isFolder || !itemPath) return;
-          event.preventDefault();
-          const sourcePath = event.dataTransfer.getData("text/plain");
-          if (!sourcePath) return;
-          const sourceName = sourcePath.split("/").filter(Boolean).pop();
-          if (!sourceName) return;
-          const targetPath = `${itemPath}/${sourceName}`;
-          if (sourcePath === targetPath) return;
-          onMove(sourcePath, targetPath);
-        }}
-        onClick={(event) => {
-          if (
-            contextSelectionEnabled &&
-            event.shiftKey &&
-            !isFolder &&
-            itemPath &&
-            onToggleContextPath
-          ) {
-            event.preventDefault();
-            event.stopPropagation();
-            onToggleContextPath(itemPath);
-            return;
-          }
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
+          <div
+            role="button"
+            tabIndex={0}
+            draggable={isDraggable}
+            onDragStart={(event) => {
+              if (!itemPath) return;
+              event.dataTransfer.setData("text/plain", itemPath);
+              onDragStart(itemPath);
+            }}
+            onDragOver={(event) => {
+              if (!allowManagement || !isFolder || !itemPath) return;
+              event.preventDefault();
+            }}
+            onDrop={(event) => {
+              if (!allowManagement || !isFolder || !itemPath) return;
+              event.preventDefault();
+              const sourcePath = event.dataTransfer.getData("text/plain");
+              if (!sourcePath) return;
+              const sourceName = sourcePath.split("/").filter(Boolean).pop();
+              if (!sourceName) return;
+              const targetPath = `${itemPath}/${sourceName}`;
+              if (sourcePath === targetPath) return;
+              onMove(sourcePath, targetPath);
+            }}
+            onClick={(event) => {
+              if (
+                contextSelectionEnabled &&
+                event.shiftKey &&
+                !isFolder &&
+                itemPath &&
+                onToggleContextPath
+              ) {
+                event.preventDefault();
+                event.stopPropagation();
+                onToggleContextPath(itemPath);
+                return;
+              }
 
-          if (isFolder) {
-            setIsExpanded(!isExpanded);
-          } else {
-            onFileSelect(item);
-          }
-        }}
-        onKeyDown={(event) => {
-          if (event.key !== "Enter" && event.key !== " ") return;
-          event.preventDefault();
-          if (isFolder) {
-            setIsExpanded((prev) => !prev);
-          } else {
-            onFileSelect(item);
-          }
-        }}
-        className={cn(
-          "w-full flex items-center gap-1 py-1 px-2 text-sm hover:bg-accent/50 rounded-sm transition-colors group cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
-          isSelected && "bg-accent",
-          isContextSelected && "ring-1 ring-primary/60 bg-primary/10"
-        )}
-        style={{ paddingLeft: `${depth * 12 + 8}px` }}
-      >
-        {isFolder ? (
-          <ChevronRight
+              if (isFolder) {
+                setIsExpanded(!isExpanded);
+              } else {
+                onFileSelect(item);
+              }
+            }}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter" && event.key !== " ") return;
+              event.preventDefault();
+              if (isFolder) {
+                setIsExpanded((prev) => !prev);
+              } else {
+                onFileSelect(item);
+              }
+            }}
             className={cn(
-              "h-3 w-3 text-muted-foreground transition-transform shrink-0",
-              isExpanded && "rotate-90"
+              "w-full min-w-0 overflow-hidden flex items-center gap-1 py-1 px-2 text-sm hover:bg-accent/50 rounded-sm transition-colors group cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+              isSelected && "bg-accent",
+              isContextSelected && "ring-1 ring-primary/60 bg-primary/10"
             )}
-          />
-        ) : (
-          <span className="w-3" />
-        )}
-        <FileIcon type={item.type} />
-        <span className="truncate flex-1 text-left">{item.name}</span>
-        {!isFolder && (
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-              {item.lastProcessed ? new Date(item.lastProcessed).toLocaleDateString() : "-"}
+            style={{ paddingLeft: `${depth * 12 + 8}px` }}
+          >
+            {isFolder ? (
+              <ChevronRight
+                className={cn(
+                  "h-3 w-3 text-muted-foreground transition-transform shrink-0",
+                  isExpanded && "rotate-90"
+                )}
+              />
+            ) : (
+              <span className="w-3" />
+            )}
+            <FileIcon type={item.type} />
+            <span className="truncate flex-1 min-w-0 text-left" title={item.name}>
+              {item.name}
             </span>
-            <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-              {formatBytes(item.size)}
-            </span>
+            {!isFolder && (
+              <div className="hidden sm:flex items-center gap-2 shrink-0">
+                <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                  {item.lastProcessed ? new Date(item.lastProcessed).toLocaleDateString() : "-"}
+                </span>
+                <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                  {formatBytes(item.size)}
+                </span>
+              </div>
+            )}
+            {allowManagement && itemPath && (
+              <div className="ml-2 flex items-center gap-1 shrink-0">
+                {canDownloadItem && (
+                  <button
+                    type="button"
+                    className="h-5 w-5 inline-flex items-center justify-center rounded hover:bg-accent/60"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onDownload(item);
+                    }}
+                    aria-label="Download file"
+                  >
+                    <Download className="h-3 w-3 text-muted-foreground" />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="h-5 w-5 inline-flex items-center justify-center rounded hover:bg-accent/60"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onRename(item);
+                  }}
+                  aria-label="Rename item"
+                >
+                  <Pencil className="h-3 w-3 text-muted-foreground" />
+                </button>
+                <button
+                  type="button"
+                  className="h-5 w-5 inline-flex items-center justify-center rounded hover:bg-accent/60"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onDelete(item);
+                  }}
+                  aria-label="Delete item"
+                >
+                  <Trash2 className="h-3 w-3 text-muted-foreground" />
+                </button>
+              </div>
+            )}
           </div>
-        )}
+        </ContextMenuTrigger>
         {allowManagement && itemPath && (
-          <div className="ml-2 flex items-center gap-1">
-            {canDownload && !isFolder && (
-              <button
-                type="button"
-                className="h-5 w-5 inline-flex items-center justify-center rounded hover:bg-accent/60"
-                onClick={(event) => {
-                  event.stopPropagation();
+          <ContextMenuContent>
+            {canDownloadItem && (
+              <ContextMenuItem
+                onSelect={() => {
                   onDownload(item);
                 }}
-                aria-label="Download file"
               >
-                <Download className="h-3 w-3 text-muted-foreground" />
-              </button>
+                <Download className="h-4 w-4" />
+                Download
+              </ContextMenuItem>
             )}
-            <button
-              type="button"
-              className="h-5 w-5 inline-flex items-center justify-center rounded hover:bg-accent/60"
-              onClick={(event) => {
-                event.stopPropagation();
+            {canDownloadItem && <ContextMenuSeparator />}
+            <ContextMenuItem
+              onSelect={() => {
                 onRename(item);
               }}
-              aria-label="Rename item"
             >
-              <Pencil className="h-3 w-3 text-muted-foreground" />
-            </button>
-            <button
-              type="button"
-              className="h-5 w-5 inline-flex items-center justify-center rounded hover:bg-accent/60"
-              onClick={(event) => {
-                event.stopPropagation();
+              <Pencil className="h-4 w-4" />
+              Rename
+            </ContextMenuItem>
+            <ContextMenuItem
+              variant="destructive"
+              onSelect={() => {
                 onDelete(item);
               }}
-              aria-label="Delete item"
             >
-              <Trash2 className="h-3 w-3 text-muted-foreground" />
-            </button>
-          </div>
+              <Trash2 className="h-4 w-4" />
+              Delete
+            </ContextMenuItem>
+          </ContextMenuContent>
         )}
-      </div>
+      </ContextMenu>
       {isFolder && isExpanded && item.children && (
         <div>
           {item.children.map((child) => (
@@ -409,7 +455,7 @@ export function FileExplorer({
               contextSelectionEnabled={contextSelectionEnabled}
               selectedContextPaths={selectedContextPaths}
               onToggleContextPath={onToggleContextPath}
-              canDownload={Boolean(selectedCourse && item.type !== "folder")}
+              canDownload={Boolean(selectedCourse)}
               onDownload={downloadItem}
               allowManagement={allowManagement}
               onRename={(target) => {

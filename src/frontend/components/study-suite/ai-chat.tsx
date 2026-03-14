@@ -60,12 +60,10 @@ function makeClientId(): string {
 function cleanAnkiText(value: string) {
   let text = value || "";
   text = text.replace(/\r\n/g, "\n");
-  text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1");
-  text = text.replace(/```|`/g, "");
-  text = text.replace(/\*\*|__|\*|_/g, "");
-  text = text.replace(/^\s{0,3}(#{1,6}|[-*+]|\d+\.)\s+/gm, "");
-  text = text.replace(/^\s{0,3}>\s?/gm, "");
-  text = text.replace(/^\s*---+\s*$/gm, "");
+  const fenced = text.trim().match(/^```[a-zA-Z0-9_-]*\n([\s\S]*?)\n?```$/);
+  if (fenced) {
+    text = fenced[1];
+  }
   text = text.replace(/\n{3,}/g, "\n\n");
   return text.trim();
 }

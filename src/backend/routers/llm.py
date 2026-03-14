@@ -29,15 +29,12 @@ chat_router = APIRouter(prefix="/chat", tags=["chat"])
 
 
 def _clean_anki_text(value: str) -> str:
-    """Normalize generated Anki text to plain text (no markdown artifacts)."""
+    """Normalize generated Anki text while preserving LaTeX expressions."""
     text = value or ""
     text = text.replace("\r\n", "\n")
-    text = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r"\1", text)
-    text = re.sub(r"(```|`)", "", text)
-    text = re.sub(r"(\*\*|__|\*|_)", "", text)
-    text = re.sub(r"^\s{0,3}(#{1,6}|[-*+]|\d+\.)\s+", "", text, flags=re.MULTILINE)
-    text = re.sub(r"^\s{0,3}>\s?", "", text, flags=re.MULTILINE)
-    text = re.sub(r"^\s*---+\s*$", "", text, flags=re.MULTILINE)
+    fenced_match = re.fullmatch(r"```[a-zA-Z0-9_-]*\n([\s\S]*?)\n?```", text.strip())
+    if fenced_match:
+        text = fenced_match.group(1)
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
 

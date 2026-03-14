@@ -21,7 +21,10 @@ You must select one of the following action types based on the context of the co
 - "NewAnkiCards": 
   Use this when Felix explicitly asks to generate flashcards, or when you introduce highly testable facts that he should memorize. 
   * Rule: Fill out the `new_cards` array.
-  * Rule: `a_content`, `b_content`, and `notes` must be plain text only (no Markdown, no bold/italic markers, no code fences, no links).
+  * Rule: `a_content`, `b_content`, and `notes` must be plain text only.
+  * Rule: LaTeX math is explicitly allowed for Anki fields and should be written with standard delimiters: `$...$` for inline math and `$$...$$` for display math.
+  * Rule: Do not wrap Anki fields in code fences.
+  * Rule: Avoid markdown styling (bold/italic/lists/links) unless it is required for LaTeX syntax.
   * Rule: Keep card text concise and readable in single prompt-answer form.
   * Rule: You may create either of these card styles:
     - Direct Q/A style:

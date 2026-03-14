@@ -11,6 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { api, AnkiCard } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { MarkdownContent } from "@/components/ui/markdown-content";
 
 interface AnkiFlashcardsProps {
   selectedCourse: string | null;
@@ -108,7 +109,10 @@ function StudyMode({ selectedCourse }: { selectedCourse: string | null }) {
           <CardContent className="p-8">
             <div className="text-center mb-6">
               <span className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2 block">Front</span>
-              <h2 className="text-xl font-medium whitespace-pre-wrap">{currentCard.a_content}</h2>
+              <MarkdownContent
+                content={currentCard.a_content}
+                className="text-xl font-medium leading-8 text-center [&_p]:my-0"
+              />
             </div>
 
             {!showAnswer && (
@@ -121,7 +125,10 @@ function StudyMode({ selectedCourse }: { selectedCourse: string | null }) {
             {showAnswer && (
               <div className="border-t border-border pt-6 mt-6">
                 <span className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2 block text-center">Back</span>
-                <p className="text-lg text-center whitespace-pre-wrap text-foreground/90">{currentCard.b_content}</p>
+                <MarkdownContent
+                  content={currentCard.b_content}
+                  className="text-lg leading-7 text-center text-foreground/90 [&_p]:my-0"
+                />
               </div>
             )}
           </CardContent>
@@ -158,26 +165,35 @@ function ManageMode({ selectedCourse }: { selectedCourse: string | null }) {
   const { toast } = useToast();
   const [cards, setCards] = useState<AnkiCard[]>([]);
   const [loading, setLoading] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [newFront, setNewFront] = useState("");
+  const [newBack, setNewBack] = useState("");
+  const [newNotes, setNewNotes] = useState("");
 
-  useEffect(() => {
+  const loadCards = async () => {
     if (!selectedCourse) {
       setCards([]);
       return;
     }
 
     setLoading(true);
-    api
-      .getAllCards(selectedCourse)
-      .then(setCards)
-      .catch((error) => {
-        toast({
-          title: "Failed to load cards",
-          description: error instanceof Error ? error.message : "Request failed",
-          variant: "destructive",
-        });
-      })
-      .finally(() => setLoading(false));
-  }, [selectedCourse, toast]);
+    try {
+      const data = await api.getAllCards(selectedCourse);
+      setCards(data);
+    } catch (error) {
+      toast({
+        title: "Failed to load cards",
+        description: error instanceof Error ? error.message : "Request failed",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadCards().catch(() => undefined);
+  }, [selectedCourse]);
 
   const sortedCards = useMemo(
     () => [...cards].sort((a, b) => new Date(a.next_date).getTime() - new Date(b.next_date).getTime()),
@@ -214,6 +230,49 @@ function ManageMode({ selectedCourse }: { selectedCourse: string | null }) {
     }
   };
 
+  const addCard = async () => {
+    if (!selectedCourse) return;
+
+    const front = newFront.trim();
+    const back = newBack.trim();
+    const notes = newNotes.trim();
+
+    if (!front || !back) {
+      toast({
+        title: "Front and back are required",
+        description: "Please provide both sides before adding a card.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setAdding(true);
+    try {
+      await api.saveGeneratedCards(selectedCourse, [
+        {
+          a_content: front,
+          b_content: back,
+          notes: notes || null,
+          is_question: front.endsWith("?"),
+        },
+      ]);
+
+      setNewFront("");
+      setNewBack("");
+      setNewNotes("");
+      toast({ title: "Card added", description: "New Anki card created." });
+      await loadCards();
+    } catch (error) {
+      toast({
+        title: "Failed to add card",
+        description: error instanceof Error ? error.message : "Request failed",
+        variant: "destructive",
+      });
+    } finally {
+      setAdding(false);
+    }
+  };
+
   if (!selectedCourse) {
     return <div className="h-full flex items-center justify-center text-sm text-muted-foreground">Select a course to manage cards.</div>;
   }
@@ -229,8 +288,42 @@ function ManageMode({ selectedCourse }: { selectedCourse: string | null }) {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="border-b border-border p-4 bg-muted/30 shrink-0 text-xs text-muted-foreground">
-        {sortedCards.length} cards
+      <div className="border-b border-border p-4 bg-muted/30 shrink-0 space-y-3">
+        <div className="text-xs text-muted-foreground">{sortedCards.length} cards</div>
+        <div className="grid grid-cols-12 gap-2 items-end">
+          <div className="col-span-4">
+            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1 block">New Front</Label>
+            <Input
+              value={newFront}
+              onChange={(e) => setNewFront(e.target.value)}
+              placeholder="Question or term"
+              className="text-sm h-9"
+            />
+          </div>
+          <div className="col-span-4">
+            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1 block">New Back</Label>
+            <Input
+              value={newBack}
+              onChange={(e) => setNewBack(e.target.value)}
+              placeholder="Answer"
+              className="text-sm h-9"
+            />
+          </div>
+          <div className="col-span-3">
+            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1 block">Notes (Optional)</Label>
+            <Input
+              value={newNotes}
+              onChange={(e) => setNewNotes(e.target.value)}
+              placeholder="Extra context"
+              className="text-sm h-9"
+            />
+          </div>
+          <div className="col-span-1 flex justify-end">
+            <Button onClick={() => addCard().catch(() => undefined)} disabled={adding} className="w-full">
+              {adding ? "Adding..." : "Add"}
+            </Button>
+          </div>
+        </div>
       </div>
 
       <ScrollArea className="flex-1">

@@ -1,15 +1,31 @@
 function resolveApiBaseUrl(): string {
-  if (process.env.NEXT_PUBLIC_API_BASE_URL) {
-    return process.env.NEXT_PUBLIC_API_BASE_URL;
-  }
-
   if (typeof window === "undefined") {
+    if (process.env.NEXT_PUBLIC_API_BASE_URL) {
+      return process.env.NEXT_PUBLIC_API_BASE_URL;
+    }
     return "http://127.0.0.1:8000";
   }
 
   const protocol = window.location.protocol;
   const host = window.location.hostname;
   const fallbackHost = host === "0.0.0.0" || host === "::" ? "127.0.0.1" : host;
+
+  if (process.env.NEXT_PUBLIC_API_BASE_URL) {
+    try {
+      const configured = new URL(process.env.NEXT_PUBLIC_API_BASE_URL);
+      const configuredHost = configured.hostname;
+      const configuredIsLocal = configuredHost === "localhost" || configuredHost === "127.0.0.1";
+      const browserIsLocal = fallbackHost === "localhost" || fallbackHost === "127.0.0.1";
+
+      // Prevent remote clients from trying to call their own localhost backend.
+      if (!(configuredIsLocal && !browserIsLocal)) {
+        return process.env.NEXT_PUBLIC_API_BASE_URL;
+      }
+    } catch {
+      return process.env.NEXT_PUBLIC_API_BASE_URL;
+    }
+  }
+
   return `${protocol}//${fallbackHost}:8000`;
 }
 

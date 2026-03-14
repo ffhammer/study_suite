@@ -1,6 +1,6 @@
 import { ResourceMeta } from "@/lib/api";
 
-export type WorkspaceFileType = "folder" | "file" | "media" | "binary";
+export type WorkspaceFileType = "folder" | "file" | "media" | "pdf" | "binary";
 
 export interface WorkspaceFileItem {
   id: string;
@@ -65,6 +65,7 @@ function detectFileType(fileName: string): WorkspaceFileType {
   const dotIndex = fileName.lastIndexOf(".");
   const ext = dotIndex >= 0 ? fileName.slice(dotIndex).toLowerCase() : "";
   if (mediaExtensions.has(ext)) return "media";
+  if (ext === ".pdf") return "pdf";
   if (textExtensions.has(ext) || ext === "") return "file";
   return "binary";
 }

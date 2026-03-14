@@ -42,6 +42,7 @@ async def get_raw_file(course_name: str, rel_path: str, request: Request):
         path=file_path,
         media_type=mime_type or "application/octet-stream",
         filename=file_path.name,
+        headers={"Content-Disposition": f'inline; filename="{file_path.name}"'},
     )
 
 

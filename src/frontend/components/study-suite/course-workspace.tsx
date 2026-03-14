@@ -10,6 +10,7 @@ import {
 import { FileExplorer } from "./file-explorer";
 import { MediaPlayer } from "./media-player";
 import { MarkdownEditor } from "./markdown-editor";
+import { PdfViewer } from "./pdf-viewer";
 import { api } from "@/lib/api";
 import { flattenFiles, WorkspaceFileItem } from "@/lib/file-tree";
 import { useToast } from "@/hooks/use-toast";
@@ -60,17 +61,18 @@ export function CourseWorkspace({
   useEffect(() => {
     const firstMedia = flatFiles.find((item) => item.file.type === "media")?.file || null;
     const firstText = flatFiles.find((item) => item.file.type === "file")?.file || null;
+    const firstPdf = flatFiles.find((item) => item.file.type === "pdf")?.file || null;
 
     setSelectedFile((prev) => {
       if (prev && fileById.has(prev.id)) return prev;
-      return firstMedia || firstText || null;
+      return firstMedia || firstText || firstPdf || flatFileItems[0] || null;
     });
     setSecondaryFile((prev) => {
       if (prev && fileById.has(prev.id)) return prev;
-      return firstMedia && firstText ? firstText : null;
+      return firstMedia && (firstText || firstPdf) ? (firstText || firstPdf) : null;
     });
     setTextContents({});
-  }, [flatFiles, fileById]);
+  }, [flatFiles, fileById, flatFileItems]);
 
   useEffect(() => {
     if (!selectedFile) return;
@@ -307,6 +309,15 @@ export function CourseWorkspace({
           sourceUrl={api.getRawFileUrl(selectedCourse, file.relativePath)}
           courseName={selectedCourse}
           onSaveTranscript={(text) => handleSaveTranscript(file, text)}
+        />
+      );
+    }
+
+    if (file.type === "pdf") {
+      return (
+        <PdfViewer
+          fileName={file.name}
+          sourceUrl={api.getRawFileUrl(selectedCourse, file.relativePath)}
         />
       );
     }

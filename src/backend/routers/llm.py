@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -23,6 +24,29 @@ from src.backend.llm.base import (
 )
 
 chat_router = APIRouter(prefix="/chat", tags=["chat"])
+
+
+def _clean_anki_text(value: str) -> str:
+    """Normalize generated Anki text to plain text (no markdown artifacts)."""
+    text = value or ""
+    text = text.replace("\r\n", "\n")
+    text = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r"\1", text)
+    text = re.sub(r"(```|`)", "", text)
+    text = re.sub(r"(\*\*|__|\*|_)", "", text)
+    text = re.sub(r"^\s{0,3}(#{1,6}|[-*+]|\d+\.)\s+", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^\s{0,3}>\s?", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^\s*---+\s*$", "", text, flags=re.MULTILINE)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+def _sanitize_anki_cards(cards: list[SimpleAnkiCard]) -> None:
+    for card in cards:
+        card.a_content = _clean_anki_text(card.a_content)
+        card.b_content = _clean_anki_text(card.b_content)
+        if card.notes:
+            cleaned_notes = _clean_anki_text(card.notes)
+            card.notes = cleaned_notes or None
 
 
 class ChatSettingsResponse(BaseModel):
@@ -309,6 +333,9 @@ async def get_response(
     if isinstance(response, str):
         # We don't save the model response if there was an error message string returned
         raise HTTPException(status_code=500, detail=response)
+
+    if response.actions.action_type == "NewAnkiCards" and response.actions.new_cards:
+        _sanitize_anki_cards(response.actions.new_cards)
 
     model_msg = ChatMessage(
         session_id=session.id,

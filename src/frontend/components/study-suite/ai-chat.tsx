@@ -25,7 +25,6 @@ import { flattenFiles, WorkspaceFileItem } from "@/lib/file-tree";
 import { useToast } from "@/hooks/use-toast";
 import { Label } from "@/components/ui/label";
 import { MarkdownContent } from "@/components/ui/markdown-content";
-import { Input } from "@/components/ui/input";
 
 interface AIChatProps {
   className?: string;
@@ -49,6 +48,19 @@ interface ChatMessage {
 interface PendingAnkiCard extends GeneratedAnkiCard {
   id: string;
   selected: boolean;
+}
+
+function cleanAnkiText(value: string) {
+  let text = value || "";
+  text = text.replace(/\r\n/g, "\n");
+  text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1");
+  text = text.replace(/```|`/g, "");
+  text = text.replace(/\*\*|__|\*|_/g, "");
+  text = text.replace(/^\s{0,3}(#{1,6}|[-*+]|\d+\.)\s+/gm, "");
+  text = text.replace(/^\s{0,3}>\s?/gm, "");
+  text = text.replace(/^\s*---+\s*$/gm, "");
+  text = text.replace(/\n{3,}/g, "\n\n");
+  return text.trim();
 }
 
 function MessageBubble({ message }: { message: ChatMessage }) {
@@ -223,9 +235,9 @@ export function AIChat({
         const proposed = (response.actions.new_cards || []).map((card) => ({
           id: crypto.randomUUID(),
           selected: true,
-          a_content: card.a_content,
-          b_content: card.b_content,
-          notes: card.notes || "",
+          a_content: cleanAnkiText(card.a_content),
+          b_content: cleanAnkiText(card.b_content),
+          notes: cleanAnkiText(card.notes || ""),
           is_question: card.is_question,
         }));
 
@@ -474,7 +486,7 @@ export function AIChat({
       </Dialog>
 
       <Dialog open={ankiReviewOpen} onOpenChange={setAnkiReviewOpen}>
-        <DialogContent className="w-[96vw] max-w-5xl h-[86vh] p-0 gap-0 flex flex-col" showCloseButton={false}>
+        <DialogContent className="w-[98vw] max-w-[98vw] h-[90vh] p-0 gap-0 flex flex-col" showCloseButton={false}>
           <DialogHeader className="px-5 py-4 border-b border-border">
             <DialogTitle className="text-base">Review New Anki Cards</DialogTitle>
             <DialogDescription>
@@ -526,7 +538,9 @@ export function AIChat({
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div className="space-y-1">
                       <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Front</Label>
-                      <Input
+                      <Textarea
+                        rows={3}
+                        className="min-h-[88px] resize-y"
                         value={card.a_content}
                         onChange={(event) =>
                           setPendingAnkiCards((prev) =>
@@ -545,7 +559,9 @@ export function AIChat({
 
                     <div className="space-y-1">
                       <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Back</Label>
-                      <Input
+                      <Textarea
+                        rows={3}
+                        className="min-h-[88px] resize-y"
                         value={card.b_content}
                         onChange={(event) =>
                           setPendingAnkiCards((prev) =>

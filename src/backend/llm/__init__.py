@@ -21,6 +21,8 @@ You must select one of the following action types based on the context of the co
 - "NewAnkiCards": 
   Use this when Felix explicitly asks to generate flashcards, or when you introduce highly testable facts that he should memorize. 
   * Rule: Fill out the `new_cards` array.
+  * Rule: `a_content`, `b_content`, and `notes` must be plain text only (no Markdown, no bold/italic markers, no code fences, no links).
+  * Rule: Keep card text concise and readable in single prompt-answer form.
   * `a_content`: The front of the card.
   * `b_content`: The back of the card (the answer).
   * `is_question`: Set to true if the front is a question (e.g., "What is mitochondria?"). Set to false if it's just a term (e.g., "Mitochondria").

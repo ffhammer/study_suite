@@ -18,6 +18,12 @@ import { buildTree, WorkspaceFileItem } from "@/lib/file-tree";
 import { useSelectedCourse } from "@/contexts/selected-course-context";
 import { useToast } from "@/hooks/use-toast";
 
+interface SummaryEditProposal {
+  requestId: number;
+  targetFile: string;
+  proposedMarkdown: string;
+}
+
 export default function StudySuite() {
   const {
     courses,
@@ -40,6 +46,7 @@ export default function StudySuite() {
   const [primaryOpenFileName, setPrimaryOpenFileName] = useState<string | null>(null);
   const [secondaryOpenFileName, setSecondaryOpenFileName] = useState<string | null>(null);
   const [splitScreen, setSplitScreen] = useState(false);
+  const [summaryEditProposal, setSummaryEditProposal] = useState<SummaryEditProposal | null>(null);
 
   const refreshTree = useCallback(async () => {
     if (!selectedCourse) {
@@ -214,6 +221,8 @@ export default function StudySuite() {
                     setSecondaryOpenFileName(secondaryFileName);
                     setSplitScreen(splitScreen);
                   }}
+                  summaryEditProposal={summaryEditProposal}
+                  onSummaryEditHandled={() => setSummaryEditProposal(null)}
                   onRefreshFiles={() => {
                     refreshTree().catch(() => undefined);
                   }}
@@ -234,6 +243,14 @@ export default function StudySuite() {
                             ? prev.filter((item) => item !== path)
                             : [...prev, path]
                         );
+                      }}
+                      onSummaryEditProposed={({ targetFile, proposedMarkdown }) => {
+                        setCurrentView("courses");
+                        setSummaryEditProposal({
+                          requestId: Date.now(),
+                          targetFile,
+                          proposedMarkdown,
+                        });
                       }}
                     />
                   </ResizablePanel>

@@ -1,5 +1,7 @@
+import asyncio
 import mimetypes
 import os
+import time
 from pathlib import Path
 from typing import List
 
@@ -119,16 +121,27 @@ class GeminiLearningAgent(BaseLearningAgent):
 
         try:
             # 6. Call the new fully Async client (.aio.models)
-            response = await self.client.aio.models.generate_content(
-                model=self.model_name, contents=formatted_contents, config=config
+            start = time.time()
+            response = await asyncio.wait_for(
+                self.client.aio.models.generate_content(
+                    model=self.model_name, contents=formatted_contents, config=config
+                ),
+                timeout=45,
             )
 
             # 7. Parse the strictly formatted JSON back into the Pydantic model
             if not response.text:
                 logger.error("Empty response from Gemini")
                 return "The AI returned an empty response. This might be due to safety filters or a temporary issue."
+            parsed_response = LLMResponse.model_validate_json(response.text)
+            logger.debug(
+                f"Gemini Response took {time.time() - start:.1f}s. Awnser is:\n{parsed_response.display_text[:100]}"
+            )
 
-            return LLMResponse.model_validate_json(response.text)
+            return parsed_response
+        except asyncio.TimeoutError:
+            logger.error("Gemini API timeout after 45 seconds")
+            return "The AI request timed out after 45 seconds. Please try again."
         except Exception as e:
             logger.error(f"Gemini API Error: {e}")
             error_msg = str(e)

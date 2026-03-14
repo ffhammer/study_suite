@@ -11,6 +11,7 @@ import { FileExplorer } from "./file-explorer";
 import { MediaPlayer } from "./media-player";
 import { MarkdownEditor } from "./markdown-editor";
 import { PdfViewer } from "./pdf-viewer";
+import { SummaryDiffEditor } from "./summary-diff-editor";
 import { api } from "@/lib/api";
 import { flattenFiles, WorkspaceFileItem } from "@/lib/file-tree";
 import { useToast } from "@/hooks/use-toast";
@@ -20,7 +21,12 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { cn } from "@/lib/utils";
+
+interface SummaryEditProposal {
+  requestId: number;
+  targetFile: string;
+  proposedMarkdown: string;
+}
 
 interface CourseWorkspaceProps {
   showSidebar: boolean;
@@ -39,6 +45,8 @@ interface CourseWorkspaceProps {
     secondaryFileName: string | null;
     splitScreen: boolean;
   }) => void;
+  summaryEditProposal?: SummaryEditProposal | null;
+  onSummaryEditHandled?: () => void;
   onRefreshFiles?: () => void;
 }
 
@@ -55,6 +63,8 @@ export function CourseWorkspace({
   createFileTrigger,
   toggleSplitTrigger,
   onHeaderStateChange,
+  summaryEditProposal,
+  onSummaryEditHandled,
   onRefreshFiles,
 }: CourseWorkspaceProps) {
   const { toast } = useToast();
@@ -63,6 +73,14 @@ export function CourseWorkspace({
   const [secondaryFile, setSecondaryFile] = useState<WorkspaceFileItem | null>(null);
   const [textContents, setTextContents] = useState<Record<string, string>>({});
   const [loadingFilePath, setLoadingFilePath] = useState<string | null>(null);
+  const [summaryEditState, setSummaryEditState] = useState<{
+    targetPath: string;
+    fileName: string;
+    originalContent: string;
+    draftContent: string;
+    existsInTree: boolean;
+  } | null>(null);
+  const [isSavingSummaryEdit, setIsSavingSummaryEdit] = useState(false);
   const lastCreateFileTrigger = useRef<number | undefined>(undefined);
   const lastToggleSplitTrigger = useRef<number | undefined>(undefined);
 
@@ -106,6 +124,80 @@ export function CourseWorkspace({
     if (fileById.has(secondaryFile.id)) return;
     setSecondaryFile(null);
   }, [fileById, secondaryFile]);
+
+  useEffect(() => {
+    if (!summaryEditProposal || !selectedCourse) return;
+
+    const openSummaryEdit = async () => {
+      const normalizePath = (value: string) =>
+        value.trim().replace(/^`+|`+$/g, "").replace(/\\/g, "/").replace(/^\.?\/+/, "");
+      const baseName = (value: string) => value.split("/").filter(Boolean).pop() || value;
+
+      const targetPath = normalizePath(summaryEditProposal.targetFile);
+      let target = flatFileItems.find(
+        (file) => file.type === "file" && normalizePath(file.relativePath || "") === targetPath
+      );
+
+      if (!target) {
+        const matchesByName = flatFileItems.filter(
+          (file) => file.type === "file" && baseName(file.relativePath || "") === baseName(targetPath)
+        );
+        if (matchesByName.length === 1) {
+          target = matchesByName[0];
+        }
+      }
+
+      if (target) {
+        setSelectedFile(target);
+      }
+      setSplitScreen(false);
+
+      const resolvedPath = target?.relativePath || targetPath;
+      let original = textContents[resolvedPath];
+      if (target && original === undefined) {
+        try {
+          const response = await api.getTextContent(selectedCourse, resolvedPath);
+          original = response.content;
+          setTextContents((prev) => ({ ...prev, [resolvedPath]: response.content }));
+        } catch (error) {
+          toast({
+            title: "Failed to load summary file",
+            description: error instanceof Error ? error.message : "Could not fetch text content.",
+            variant: "destructive",
+          });
+          onSummaryEditHandled?.();
+          return;
+        }
+      }
+
+      if (!target) {
+        toast({
+          title: "Summary target not found",
+          description: `Opening review for ${resolvedPath}. Applying will create this file.`,
+        });
+      }
+
+      setSummaryEditState({
+        targetPath: resolvedPath,
+        fileName: baseName(resolvedPath),
+        originalContent: original ?? "",
+        draftContent: summaryEditProposal.proposedMarkdown,
+        existsInTree: Boolean(target),
+      });
+      onSummaryEditHandled?.();
+    };
+
+    openSummaryEdit().catch(() => {
+      onSummaryEditHandled?.();
+    });
+  }, [
+    flatFileItems,
+    onSummaryEditHandled,
+    selectedCourse,
+    summaryEditProposal,
+    textContents,
+    toast,
+  ]);
 
   const loadTextContent = useCallback(async (file: WorkspaceFileItem) => {
     if (!selectedCourse || !file.relativePath || file.type !== "file") return;
@@ -181,6 +273,56 @@ export function CourseWorkspace({
         description: error instanceof Error ? error.message : "Could not save file changes.",
         variant: "destructive",
       });
+    }
+  };
+
+  const handleSaveSummaryEdit = async () => {
+    if (!selectedCourse || !summaryEditState) return;
+
+    setIsSavingSummaryEdit(true);
+    try {
+      if (summaryEditState.existsInTree) {
+        await api.updateTextContent(
+          selectedCourse,
+          summaryEditState.targetPath,
+          summaryEditState.draftContent
+        );
+      } else {
+        await api.createTextFile(
+          selectedCourse,
+          summaryEditState.targetPath,
+          summaryEditState.draftContent
+        );
+      }
+
+      setTextContents((prev) => ({
+        ...prev,
+        [summaryEditState.targetPath]: summaryEditState.draftContent,
+      }));
+
+      setSummaryEditState((prev) =>
+        prev
+          ? {
+              ...prev,
+              originalContent: prev.draftContent,
+              existsInTree: true,
+            }
+          : prev
+      );
+
+      toast({
+        title: "Summary updated",
+        description: `${summaryEditState.targetPath} saved successfully.`,
+      });
+      onRefreshFiles?.();
+    } catch (error) {
+      toast({
+        title: "Failed to save summary changes",
+        description: error instanceof Error ? error.message : "Request failed.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSavingSummaryEdit(false);
     }
   };
 
@@ -357,6 +499,29 @@ export function CourseWorkspace({
       );
     }
 
+    if (summaryEditState && summaryEditState.targetPath === file.relativePath) {
+      return (
+        <SummaryDiffEditor
+          fileName={file.name}
+          originalContent={summaryEditState.originalContent}
+          draftContent={summaryEditState.draftContent}
+          isSaving={isSavingSummaryEdit}
+          onDraftChange={(value) =>
+            setSummaryEditState((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    draftContent: value,
+                  }
+                : prev
+            )
+          }
+          onSave={handleSaveSummaryEdit}
+          onClose={() => setSummaryEditState(null)}
+        />
+      );
+    }
+
     return (
       <MarkdownEditor
         file={file}
@@ -364,6 +529,33 @@ export function CourseWorkspace({
         onSave={(content) => handleSaveFile(file, content)}
       />
     );
+  };
+
+  const renderPrimaryContent = () => {
+    if (summaryEditState) {
+      return (
+        <SummaryDiffEditor
+          fileName={summaryEditState.fileName}
+          originalContent={summaryEditState.originalContent}
+          draftContent={summaryEditState.draftContent}
+          isSaving={isSavingSummaryEdit}
+          onDraftChange={(value) =>
+            setSummaryEditState((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    draftContent: value,
+                  }
+                : prev
+            )
+          }
+          onSave={handleSaveSummaryEdit}
+          onClose={() => setSummaryEditState(null)}
+        />
+      );
+    }
+
+    return renderFileContent(selectedFile);
   };
 
   return (
@@ -391,7 +583,7 @@ export function CourseWorkspace({
         <div className="h-full min-h-0">
           {splitScreen ? (
             <ResizablePanelGroup direction="horizontal" className="h-full">
-              <ResizablePanel defaultSize={50}>{renderFileContent(selectedFile)}</ResizablePanel>
+              <ResizablePanel defaultSize={50}>{renderPrimaryContent()}</ResizablePanel>
               <ResizableHandle withHandle />
               <ResizablePanel defaultSize={50}>
                 <div className="h-full flex flex-col">
@@ -452,7 +644,7 @@ export function CourseWorkspace({
                   </ResizablePanel>
                 </ResizablePanelGroup>
               ) : (
-                renderFileContent(selectedFile)
+                renderPrimaryContent()
               )}
         </div>
       </ResizablePanel>

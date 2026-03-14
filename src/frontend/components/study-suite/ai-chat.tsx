@@ -31,6 +31,10 @@ interface AIChatProps {
   selectedCourse: string | null;
   selectedContextPaths?: string[];
   onToggleContextPath?: (path: string) => void;
+  onSummaryEditProposed?: (proposal: {
+    targetFile: string;
+    proposedMarkdown: string;
+  }) => void;
 }
 
 interface ChatMessage {
@@ -117,6 +121,7 @@ export function AIChat({
   selectedCourse,
   selectedContextPaths,
   onToggleContextPath,
+  onSummaryEditProposed,
 }: AIChatProps) {
   const { toast } = useToast();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -236,10 +241,20 @@ export function AIChat({
       }
 
       if (response.actions.action_type === "SummaryEdit") {
+        const targetFile = response.actions.target_file?.trim();
+        const proposedMarkdown = response.actions.proposed_markdown;
+
+        if (targetFile && typeof proposedMarkdown === "string") {
+          onSummaryEditProposed?.({
+            targetFile,
+            proposedMarkdown,
+          });
+        }
+
         toast({
           title: "Summary edit proposed",
-          description: response.actions.target_file
-            ? `Review suggested rewrite for ${response.actions.target_file}.`
+          description: targetFile
+            ? `Opened diff review for ${targetFile}.`
             : "The assistant proposed a markdown rewrite.",
         });
       }

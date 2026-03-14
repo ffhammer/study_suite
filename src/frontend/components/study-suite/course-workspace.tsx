@@ -1,8 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, SplitSquareHorizontal, X, FileText, Plus } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Loader2, X, FileText } from "lucide-react";
 import {
   ResizablePanelGroup,
   ResizablePanel,
@@ -21,6 +20,13 @@ interface CourseWorkspaceProps {
   selectedCourse: string | null;
   openFileId?: string | null;
   onOpenFileHandled?: () => void;
+  createFileTrigger?: number;
+  toggleSplitTrigger?: number;
+  onHeaderStateChange?: (state: {
+    primaryFileName: string | null;
+    secondaryFileName: string | null;
+    splitScreen: boolean;
+  }) => void;
   onRefreshFiles?: () => void;
 }
 
@@ -30,6 +36,9 @@ export function CourseWorkspace({
   selectedCourse,
   openFileId,
   onOpenFileHandled,
+  createFileTrigger,
+  toggleSplitTrigger,
+  onHeaderStateChange,
   onRefreshFiles,
 }: CourseWorkspaceProps) {
   const { toast } = useToast();
@@ -38,6 +47,8 @@ export function CourseWorkspace({
   const [secondaryFile, setSecondaryFile] = useState<WorkspaceFileItem | null>(null);
   const [textContents, setTextContents] = useState<Record<string, string>>({});
   const [loadingFilePath, setLoadingFilePath] = useState<string | null>(null);
+  const lastCreateFileTrigger = useRef<number | undefined>(undefined);
+  const lastToggleSplitTrigger = useRef<number | undefined>(undefined);
 
   const flatFiles = useMemo(() => flattenFiles(files), [files]);
   const flatFileItems = useMemo(() => flatFiles.map((item) => item.file), [flatFiles]);
@@ -208,7 +219,7 @@ export function CourseWorkspace({
       const isMod = event.metaKey || event.ctrlKey;
       if (!isMod) return;
 
-      if (event.key === "\\") {
+      if (event.key.toLowerCase() === "i") {
         event.preventDefault();
         setSplitScreen((prev) => !prev);
       }
@@ -222,6 +233,36 @@ export function CourseWorkspace({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [handleCreateFile]);
+
+  useEffect(() => {
+    if (createFileTrigger === undefined) return;
+    if (lastCreateFileTrigger.current === undefined) {
+      lastCreateFileTrigger.current = createFileTrigger;
+      return;
+    }
+    if (lastCreateFileTrigger.current === createFileTrigger) return;
+    lastCreateFileTrigger.current = createFileTrigger;
+    handleCreateFile().catch(() => undefined);
+  }, [createFileTrigger, handleCreateFile]);
+
+  useEffect(() => {
+    if (toggleSplitTrigger === undefined) return;
+    if (lastToggleSplitTrigger.current === undefined) {
+      lastToggleSplitTrigger.current = toggleSplitTrigger;
+      return;
+    }
+    if (lastToggleSplitTrigger.current === toggleSplitTrigger) return;
+    lastToggleSplitTrigger.current = toggleSplitTrigger;
+    setSplitScreen((prev) => !prev);
+  }, [toggleSplitTrigger]);
+
+  useEffect(() => {
+    onHeaderStateChange?.({
+      primaryFileName: selectedFile?.name || null,
+      secondaryFileName: splitScreen ? secondaryFile?.name || null : null,
+      splitScreen,
+    });
+  }, [onHeaderStateChange, selectedFile, secondaryFile, splitScreen]);
 
   const renderFileContent = (file: WorkspaceFileItem | null) => {
     if (!file) {
@@ -299,65 +340,33 @@ export function CourseWorkspace({
       )}
 
       <ResizablePanel defaultSize={showSidebar ? 80 : 100}>
-        <div className="h-full flex flex-col">
-          <div className="h-9 border-b border-border flex items-center justify-between px-3 shrink-0 bg-muted/30">
-            <div className="flex items-center gap-2">
-              {selectedFile && (
-                <span className="text-xs text-muted-foreground">{selectedFile.name}</span>
-              )}
-            </div>
-            <div className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 text-xs gap-1.5"
-                onClick={() => {
-                  handleCreateFile().catch(() => undefined);
-                }}
-              >
-                <Plus className="h-3.5 w-3.5" />
-                New File
-              </Button>
-              <Button
-                variant={splitScreen ? "secondary" : "ghost"}
-                size="sm"
-                className="h-7 text-xs gap-1.5"
-                onClick={() => setSplitScreen(!splitScreen)}
-              >
-                <SplitSquareHorizontal className="h-3.5 w-3.5" />
-                Split (Cmd/Ctrl+\)
-              </Button>
-            </div>
-          </div>
-
-          <div className="flex-1 min-h-0">
-            {splitScreen ? (
-              <ResizablePanelGroup direction="horizontal" className="h-full">
-                <ResizablePanel defaultSize={50}>{renderFileContent(selectedFile)}</ResizablePanel>
-                <ResizableHandle withHandle />
-                <ResizablePanel defaultSize={50}>
-                  <div className="h-full flex flex-col">
-                    {secondaryFile && (
-                      <div className="h-7 border-b border-border flex items-center justify-between px-2 bg-muted/30 shrink-0">
-                        <span className="text-xs text-muted-foreground truncate">{secondaryFile.name}</span>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-5 w-5"
-                          onClick={() => setSecondaryFile(null)}
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    )}
-                    <div className="flex-1 min-h-0">{renderFileContent(secondaryFile)}</div>
-                  </div>
-                </ResizablePanel>
-              </ResizablePanelGroup>
-            ) : (
-              renderFileContent(selectedFile)
-            )}
-          </div>
+        <div className="h-full min-h-0">
+          {splitScreen ? (
+            <ResizablePanelGroup direction="horizontal" className="h-full">
+              <ResizablePanel defaultSize={50}>{renderFileContent(selectedFile)}</ResizablePanel>
+              <ResizableHandle withHandle />
+              <ResizablePanel defaultSize={50}>
+                <div className="h-full flex flex-col">
+                  {secondaryFile && (
+                    <div className="h-7 border-b border-border flex items-center justify-between px-2 bg-muted/30 shrink-0">
+                      <span className="text-xs text-muted-foreground truncate">{secondaryFile.name}</span>
+                      <button
+                        type="button"
+                        className="h-5 w-5 inline-flex items-center justify-center rounded hover:bg-muted"
+                        onClick={() => setSecondaryFile(null)}
+                        aria-label="Close secondary panel"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  )}
+                  <div className="flex-1 min-h-0">{renderFileContent(secondaryFile)}</div>
+                </div>
+              </ResizablePanel>
+            </ResizablePanelGroup>
+          ) : (
+            renderFileContent(selectedFile)
+          )}
         </div>
       </ResizablePanel>
     </ResizablePanelGroup>

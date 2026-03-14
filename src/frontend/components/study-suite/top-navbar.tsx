@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, Search, PanelRight, MessageSquare, GraduationCap, Plus } from "lucide-react";
+import { ChevronDown, Search, PanelRight, MessageSquare, GraduationCap, Plus, SplitSquareHorizontal } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,6 +17,11 @@ interface TopNavbarProps {
   coursesLoading?: boolean;
   onCourseChange: (courseName: string) => void;
   onCreateCourse: () => void;
+  primaryOpenFileName?: string | null;
+  secondaryOpenFileName?: string | null;
+  splitScreen?: boolean;
+  onCreateFile?: () => void;
+  onToggleSplit?: () => void;
   currentView: "overview" | "courses" | "anki";
   onViewChange: (view: "overview" | "courses" | "anki") => void;
 }
@@ -27,6 +32,11 @@ export function TopNavbar({
   coursesLoading = false,
   onCourseChange,
   onCreateCourse,
+  primaryOpenFileName,
+  secondaryOpenFileName,
+  splitScreen = false,
+  onCreateFile,
+  onToggleSplit,
   currentView,
   onViewChange,
 }: TopNavbarProps) {
@@ -102,6 +112,42 @@ export function TopNavbar({
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {currentView === "courses" && (
+          <>
+            <div className="h-4 w-px bg-border" />
+            <div className="flex items-center gap-2 min-w-0">
+              {primaryOpenFileName && (
+                <span className="text-xs text-muted-foreground truncate max-w-[220px]" title={primaryOpenFileName}>
+                  {primaryOpenFileName}
+                </span>
+              )}
+              {secondaryOpenFileName && (
+                <span className="text-xs text-muted-foreground truncate max-w-[220px]" title={secondaryOpenFileName}>
+                  {secondaryOpenFileName}
+                </span>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs gap-1.5"
+                onClick={onCreateFile}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                New File
+              </Button>
+              <Button
+                variant={splitScreen ? "secondary" : "ghost"}
+                size="sm"
+                className="h-7 text-xs gap-1.5"
+                onClick={onToggleSplit}
+              >
+                <SplitSquareHorizontal className="h-3.5 w-3.5" />
+                Split (Cmd/Ctrl+I)
+              </Button>
+            </div>
+          </>
+        )}
       </div>
 
       <div className="flex items-center gap-3">
@@ -120,11 +166,13 @@ export function TopNavbar({
           <span>AI Chat</span>
           <Kbd>J</Kbd>
         </div>
-        <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
-          <Plus className="h-3 w-3" />
-          <span>New File</span>
-          <Kbd>N</Kbd>
-        </div>
+        {currentView === "courses" && (
+          <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
+            <SplitSquareHorizontal className="h-3 w-3" />
+            <span>Split</span>
+            <Kbd>I</Kbd>
+          </div>
+        )}
       </div>
     </header>
   );

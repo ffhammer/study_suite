@@ -33,6 +33,11 @@ export default function StudySuite() {
   const [commandOpen, setCommandOpen] = useState(false);
   const [treeFiles, setTreeFiles] = useState<WorkspaceFileItem[]>([]);
   const [openFileId, setOpenFileId] = useState<string | null>(null);
+  const [createFileTrigger, setCreateFileTrigger] = useState(0);
+  const [toggleSplitTrigger, setToggleSplitTrigger] = useState(0);
+  const [primaryOpenFileName, setPrimaryOpenFileName] = useState<string | null>(null);
+  const [secondaryOpenFileName, setSecondaryOpenFileName] = useState<string | null>(null);
+  const [splitScreen, setSplitScreen] = useState(false);
 
   const refreshTree = useCallback(async () => {
     if (!selectedCourse) {
@@ -129,6 +134,11 @@ export default function StudySuite() {
         onCreateCourse={() => {
           handleCreateCourse().catch(() => undefined);
         }}
+        primaryOpenFileName={primaryOpenFileName}
+        secondaryOpenFileName={secondaryOpenFileName}
+        splitScreen={splitScreen}
+        onCreateFile={() => setCreateFileTrigger((prev) => prev + 1)}
+        onToggleSplit={() => setToggleSplitTrigger((prev) => prev + 1)}
         currentView={currentView}
         onViewChange={setCurrentView}
       />
@@ -175,6 +185,13 @@ export default function StudySuite() {
                   selectedCourse={selectedCourse}
                   openFileId={openFileId}
                   onOpenFileHandled={() => setOpenFileId(null)}
+                  createFileTrigger={createFileTrigger}
+                  toggleSplitTrigger={toggleSplitTrigger}
+                  onHeaderStateChange={({ primaryFileName, secondaryFileName, splitScreen }) => {
+                    setPrimaryOpenFileName(primaryFileName);
+                    setSecondaryOpenFileName(secondaryFileName);
+                    setSplitScreen(splitScreen);
+                  }}
                   onRefreshFiles={() => {
                     refreshTree().catch(() => undefined);
                   }}

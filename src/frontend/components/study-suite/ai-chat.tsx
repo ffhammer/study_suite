@@ -20,6 +20,8 @@ interface AIChatProps {
   className?: string;
   files: WorkspaceFileItem[];
   selectedCourse: string | null;
+  selectedContextPaths?: string[];
+  onToggleContextPath?: (path: string) => void;
 }
 
 interface ChatMessage {
@@ -100,11 +102,17 @@ function MessageBubble({ message }: { message: ChatMessage }) {
   );
 }
 
-export function AIChat({ className, files, selectedCourse }: AIChatProps) {
+export function AIChat({
+  className,
+  files,
+  selectedCourse,
+  selectedContextPaths,
+  onToggleContextPath,
+}: AIChatProps) {
   const { toast } = useToast();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
-  const [selectedContext, setSelectedContext] = useState<string[]>([]);
+  const [selectedContextInternal, setSelectedContextInternal] = useState<string[]>([]);
   const [contextOpen, setContextOpen] = useState(false);
   const [selectedImages, setSelectedImages] = useState<File[]>([]);
   const [conversationId, setConversationId] = useState<string | undefined>(undefined);
@@ -112,12 +120,15 @@ export function AIChat({ className, files, selectedCourse }: AIChatProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const flatFiles = useMemo(() => flattenFiles(files), [files]);
+  const selectedContext = selectedContextPaths ?? selectedContextInternal;
 
   const toggleContext = (path: string) => {
-    setSelectedContext((prev) =>
-      prev.includes(path)
-        ? prev.filter((p) => p !== path)
-        : [...prev, path]
+    if (onToggleContextPath) {
+      onToggleContextPath(path);
+      return;
+    }
+    setSelectedContextInternal((prev) =>
+      prev.includes(path) ? prev.filter((p) => p !== path) : [...prev, path]
     );
   };
 

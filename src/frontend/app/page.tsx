@@ -29,10 +29,12 @@ export default function StudySuite() {
   const { toast } = useToast();
   const [currentView, setCurrentView] = useState<"overview" | "courses" | "anki">("overview");
   const [showSidebar, setShowSidebar] = useState(true);
-  const [showChat, setShowChat] = useState(true);
+  const [showChat, setShowChat] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [treeFiles, setTreeFiles] = useState<WorkspaceFileItem[]>([]);
   const [openFileId, setOpenFileId] = useState<string | null>(null);
+  const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
+  const [aiContextPaths, setAiContextPaths] = useState<string[]>([]);
   const [createFileTrigger, setCreateFileTrigger] = useState(0);
   const [toggleSplitTrigger, setToggleSplitTrigger] = useState(0);
   const [primaryOpenFileName, setPrimaryOpenFileName] = useState<string | null>(null);
@@ -61,6 +63,16 @@ export default function StudySuite() {
   useEffect(() => {
     refreshTree().catch(() => undefined);
   }, [refreshTree]);
+
+  useEffect(() => {
+    // Context files belong to the active course scope.
+    setAiContextPaths([]);
+  }, [selectedCourse]);
+
+  useEffect(() => {
+    if (!showChat || !activeFilePath) return;
+    setAiContextPaths((prev) => (prev.includes(activeFilePath) ? prev : [activeFilePath, ...prev]));
+  }, [showChat, activeFilePath]);
 
   // Keyboard shortcuts
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -178,11 +190,21 @@ export default function StudySuite() {
             />
           ) : currentView === "courses" ? (
             <ResizablePanelGroup direction="vertical" className="h-full">
-              <ResizablePanel defaultSize={showChat ? 70 : 100} minSize={30}>
+              <ResizablePanel defaultSize={showChat ? 65 : 100} minSize={20}>
                 <CourseWorkspace
                   showSidebar={showSidebar}
                   files={treeFiles}
                   selectedCourse={selectedCourse}
+                  contextSelectionEnabled={showChat}
+                  selectedContextPaths={aiContextPaths}
+                  onToggleContextPath={(path) => {
+                    setAiContextPaths((prev) =>
+                      prev.includes(path)
+                        ? prev.filter((item) => item !== path)
+                        : [...prev, path]
+                    );
+                  }}
+                  onPrimaryFilePathChange={setActiveFilePath}
                   openFileId={openFileId}
                   onOpenFileHandled={() => setOpenFileId(null)}
                   createFileTrigger={createFileTrigger}
@@ -200,9 +222,20 @@ export default function StudySuite() {
 
               {showChat && (
                 <>
-                  <ResizableHandle />
-                  <ResizablePanel defaultSize={30} minSize={20} maxSize={50}>
-                    <AIChat files={treeFiles} selectedCourse={selectedCourse} />
+                  <ResizableHandle withHandle />
+                  <ResizablePanel defaultSize={35} minSize={20} maxSize={80}>
+                    <AIChat
+                      files={treeFiles}
+                      selectedCourse={selectedCourse}
+                      selectedContextPaths={aiContextPaths}
+                      onToggleContextPath={(path) => {
+                        setAiContextPaths((prev) =>
+                          prev.includes(path)
+                            ? prev.filter((item) => item !== path)
+                            : [...prev, path]
+                        );
+                      }}
+                    />
                   </ResizablePanel>
                 </>
               )}

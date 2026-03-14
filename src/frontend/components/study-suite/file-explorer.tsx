@@ -26,6 +26,9 @@ interface FileExplorerProps {
   onFileSelect: (file: WorkspaceFileItem) => void;
   selectedCourse?: string | null;
   allowManagement?: boolean;
+  contextSelectionEnabled?: boolean;
+  selectedContextPaths?: string[];
+  onToggleContextPath?: (path: string) => void;
   onRefresh?: () => void;
 }
 
@@ -50,6 +53,9 @@ interface FileTreeItemProps {
   depth: number;
   selectedFileId: string | null;
   onFileSelect: (file: WorkspaceFileItem) => void;
+  contextSelectionEnabled: boolean;
+  selectedContextPaths: string[];
+  onToggleContextPath?: (path: string) => void;
   canDownload: boolean;
   onDownload: (item: WorkspaceFileItem) => void;
   allowManagement: boolean;
@@ -64,6 +70,9 @@ function FileTreeItem({
   depth,
   selectedFileId,
   onFileSelect,
+  contextSelectionEnabled,
+  selectedContextPaths,
+  onToggleContextPath,
   canDownload,
   onDownload,
   allowManagement,
@@ -78,6 +87,9 @@ function FileTreeItem({
 
   const itemPath = item.relativePath;
   const isDraggable = allowManagement && Boolean(itemPath);
+  const isContextSelected = Boolean(
+    contextSelectionEnabled && itemPath && selectedContextPaths.includes(itemPath)
+  );
 
   return (
     <div>
@@ -105,7 +117,20 @@ function FileTreeItem({
           if (sourcePath === targetPath) return;
           onMove(sourcePath, targetPath);
         }}
-        onClick={() => {
+        onClick={(event) => {
+          if (
+            contextSelectionEnabled &&
+            event.shiftKey &&
+            !isFolder &&
+            itemPath &&
+            onToggleContextPath
+          ) {
+            event.preventDefault();
+            event.stopPropagation();
+            onToggleContextPath(itemPath);
+            return;
+          }
+
           if (isFolder) {
             setIsExpanded(!isExpanded);
           } else {
@@ -123,7 +148,8 @@ function FileTreeItem({
         }}
         className={cn(
           "w-full flex items-center gap-1 py-1 px-2 text-sm hover:bg-accent/50 rounded-sm transition-colors group cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
-          isSelected && "bg-accent"
+          isSelected && "bg-accent",
+          isContextSelected && "ring-1 ring-primary/60 bg-primary/10"
         )}
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
       >
@@ -139,6 +165,16 @@ function FileTreeItem({
         )}
         <FileIcon type={item.type} />
         <span className="truncate flex-1 text-left">{item.name}</span>
+        {!isFolder && (
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+              {item.lastProcessed ? new Date(item.lastProcessed).toLocaleDateString() : "-"}
+            </span>
+            <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+              {formatBytes(item.size)}
+            </span>
+          </div>
+        )}
         {allowManagement && itemPath && (
           <div className="ml-2 flex items-center gap-1">
             {canDownload && !isFolder && (
@@ -178,16 +214,6 @@ function FileTreeItem({
             </button>
           </div>
         )}
-        {!isFolder && (
-          <div className="flex items-center gap-2 ml-auto">
-            <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-              {item.lastProcessed ? new Date(item.lastProcessed).toLocaleDateString() : "-"}
-            </span>
-            <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-              {formatBytes(item.size)}
-            </span>
-          </div>
-        )}
       </div>
       {isFolder && isExpanded && item.children && (
         <div>
@@ -198,7 +224,10 @@ function FileTreeItem({
               depth={depth + 1}
               selectedFileId={selectedFileId}
               onFileSelect={onFileSelect}
-              canDownload={true}
+              contextSelectionEnabled={contextSelectionEnabled}
+              selectedContextPaths={selectedContextPaths}
+              onToggleContextPath={onToggleContextPath}
+              canDownload={canDownload}
               onDownload={onDownload}
               allowManagement={allowManagement}
               onRename={onRename}
@@ -229,6 +258,9 @@ export function FileExplorer({
   onFileSelect,
   selectedCourse,
   allowManagement = false,
+  contextSelectionEnabled = false,
+  selectedContextPaths = [],
+  onToggleContextPath,
   onRefresh,
 }: FileExplorerProps) {
   const { toast } = useToast();
@@ -371,7 +403,10 @@ export function FileExplorer({
               depth={0}
               selectedFileId={selectedFileId}
               onFileSelect={onFileSelect}
-              canDownload={true}
+              contextSelectionEnabled={contextSelectionEnabled}
+              selectedContextPaths={selectedContextPaths}
+              onToggleContextPath={onToggleContextPath}
+              canDownload={Boolean(selectedCourse && item.type !== "folder")}
               onDownload={downloadItem}
               allowManagement={allowManagement}
               onRename={(target) => {

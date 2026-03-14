@@ -19,6 +19,10 @@ interface CourseWorkspaceProps {
   showSidebar: boolean;
   files: WorkspaceFileItem[];
   selectedCourse: string | null;
+  contextSelectionEnabled?: boolean;
+  selectedContextPaths?: string[];
+  onToggleContextPath?: (path: string) => void;
+  onPrimaryFilePathChange?: (path: string | null) => void;
   openFileId?: string | null;
   onOpenFileHandled?: () => void;
   createFileTrigger?: number;
@@ -35,6 +39,10 @@ export function CourseWorkspace({
   showSidebar,
   files,
   selectedCourse,
+  contextSelectionEnabled = false,
+  selectedContextPaths = [],
+  onToggleContextPath,
+  onPrimaryFilePathChange,
   openFileId,
   onOpenFileHandled,
   createFileTrigger,
@@ -266,6 +274,10 @@ export function CourseWorkspace({
     });
   }, [onHeaderStateChange, selectedFile, secondaryFile, splitScreen]);
 
+  useEffect(() => {
+    onPrimaryFilePathChange?.(selectedFile?.relativePath || null);
+  }, [onPrimaryFilePathChange, selectedFile]);
+
   const renderFileContent = (file: WorkspaceFileItem | null) => {
     if (!file) {
       return (
@@ -352,6 +364,9 @@ export function CourseWorkspace({
               selectedFileId={selectedFile?.id || null}
               selectedCourse={selectedCourse}
               allowManagement
+              contextSelectionEnabled={contextSelectionEnabled}
+              selectedContextPaths={selectedContextPaths}
+              onToggleContextPath={onToggleContextPath}
               onFileSelect={handleFileSelect}
               onRefresh={onRefreshFiles}
             />

@@ -94,9 +94,9 @@ class BaseLearningAgent(ABC):
         session: "ChatSession | None",
         new_message: "ChatMessage",
         context_paths: List[Path] = [],
-    ) -> LLMResponse:
+    ) -> LLMResponse | str:
         """
         Takes the selected files and the chat history,
-        returns a structured LLMResponse.
+        returns a structured LLMResponse or a string error message.
         """
         pass

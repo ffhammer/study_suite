@@ -267,11 +267,23 @@ async def get_response(
             detail="LLM is not configured. Set GEMINI_API_KEY or GOOGLE_API_KEY and restart the backend.",
         )
 
+    # Reload session to ensure it's bound to the current session and has messages loaded
+    session = await db.query_table(
+        ChatSession,
+        where_clauses=[ChatSession.id == session.id],
+        options=[selectinload(ChatSession.messages).selectinload(ChatMessage.images)],
+        mode="first",
+    )
+
     response = await agent.get_answer(
         session=session,
         new_message=user_msg,
         context_paths=context_paths,
     )
+
+    if isinstance(response, str):
+        # We don't save the model response if there was an error message string returned
+        raise HTTPException(status_code=500, detail=response)
 
     model_msg = ChatMessage(
         session_id=session.id,

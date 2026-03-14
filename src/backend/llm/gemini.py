@@ -6,6 +6,7 @@ from typing import List
 # 1. Use the NEW modern GenAI SDK
 from google import genai
 from google.genai import types
+from loguru import logger
 
 from src.backend.database.models import ChatMessage, ChatSession
 
@@ -28,7 +29,7 @@ class GeminiLearningAgent(BaseLearningAgent):
         session: ChatSession | None,
         new_message: ChatMessage,
         context_paths: List[Path] = [],
-    ) -> LLMResponse:
+    ) -> LLMResponse | str:
         # 3. Build dynamic Part objects for Context (PDFs as inline 64-bit & High-Res Images)
         # We process these directly into SDK Part objects instead of long concatenated strings
         context_parts = []
@@ -37,7 +38,11 @@ class GeminiLearningAgent(BaseLearningAgent):
                 continue
 
             mime_type, _ = mimetypes.guess_type(path)
-            file_bytes = path.read_bytes()
+            try:
+                file_bytes = path.read_bytes()
+            except Exception as e:
+                logger.error(f"Error reading context file {path}: {e}")
+                continue
 
             if mime_type == "application/pdf":
                 context_parts.append(
@@ -60,8 +65,13 @@ class GeminiLearningAgent(BaseLearningAgent):
         # Instead of using a stateful chat session, passing structured `Content` objects
         # is the most robust way to inject complex files into specific messages.
         history: List[ChatMessage] = []
-        if session and session.messages:
-            history = sorted(session.messages, key=lambda m: m.created_at)
+        try:
+            if session and session.messages:
+                history = sorted(session.messages, key=lambda m: m.created_at)
+        except Exception as e:
+            logger.error(f"Error accessing session messages: {e}")
+            # If we hit DetachedInstanceError here, we might want to fail gracefully
+            return "Error accessing chat history. Please try again."
 
         # Ensure the just-created message exists in the prompt history.
         if not history or history[-1].id != new_message.id:
@@ -73,20 +83,25 @@ class GeminiLearningAgent(BaseLearningAgent):
             parts = []
 
             # Include pasted user images directly with the message.
-            if role == "user" and getattr(msg, "images", None):
-                for image in msg.images:
-                    parts.append(
-                        types.Part.from_bytes(
-                            data=image.image_data,
-                            mime_type="image/png",
+            try:
+                if role == "user" and getattr(msg, "images", None):
+                    for image in msg.images:
+                        parts.append(
+                            types.Part.from_bytes(
+                                data=image.image_data,
+                                mime_type="image/png",
+                            )
                         )
-                    )
+            except Exception as e:
+                logger.warning(f"Error accessing message images: {e}")
 
             # Inject selected context only with the latest user turn.
             if i == len(history) - 1 and role == "user":
                 parts.extend(context_parts)
 
-            parts.append(msg.content)
+            if msg.content:
+                parts.append(types.Part.from_text(text=msg.content))
+
             formatted_contents.append(types.Content(role=role, parts=parts))
 
         # 5. Define generation config with pure Pydantic Structured Output & System Instructions [1]
@@ -98,10 +113,24 @@ class GeminiLearningAgent(BaseLearningAgent):
             response_json_schema=LLMResponse.model_json_schema(),
         )
 
-        # 6. Call the new fully Async client (.aio.models)
-        response = await self.client.aio.models.generate_content(
-            model=self.model_name, contents=formatted_contents, config=config
-        )
+        try:
+            # 6. Call the new fully Async client (.aio.models)
+            response = await self.client.aio.models.generate_content(
+                model=self.model_name, contents=formatted_contents, config=config
+            )
 
-        # 7. Parse the strictly formatted JSON back into the Pydantic model
-        return LLMResponse.model_validate_json(response.text)
+            # 7. Parse the strictly formatted JSON back into the Pydantic model
+            if not response.text:
+                logger.error("Empty response from Gemini")
+                return "The AI returned an empty response. This might be due to safety filters or a temporary issue."
+
+            return LLMResponse.model_validate_json(response.text)
+        except Exception as e:
+            logger.error(f"Gemini API Error: {e}")
+            error_msg = str(e)
+            if "429" in error_msg or "quota" in error_msg.lower():
+                return "Rate limit exceeded. Please wait a moment before trying again."
+            elif "503" in error_msg or "overloaded" in error_msg.lower():
+                return "The AI service is currently overloaded. Please try again in a few seconds."
+            else:
+                return f"An error occurred while communicating with the AI: {error_msg}"

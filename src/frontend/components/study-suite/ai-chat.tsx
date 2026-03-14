@@ -24,6 +24,7 @@ import { api } from "@/lib/api";
 import { flattenFiles, WorkspaceFileItem } from "@/lib/file-tree";
 import { useToast } from "@/hooks/use-toast";
 import { Label } from "@/components/ui/label";
+import { MarkdownContent } from "@/components/ui/markdown-content";
 
 interface AIChatProps {
   className?: string;
@@ -42,35 +43,6 @@ interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   timestamp: string;
-}
-
-function renderSimpleMarkdown(content: string) {
-  return content.split("\n").map((line, idx) => {
-    if (line.startsWith("### ")) {
-      return <h3 key={idx} className="text-sm font-semibold mt-2 mb-1">{line.slice(4)}</h3>;
-    }
-    if (line.startsWith("## ")) {
-      return <h2 key={idx} className="text-base font-semibold mt-2 mb-1">{line.slice(3)}</h2>;
-    }
-    if (line.startsWith("# ")) {
-      return <h1 key={idx} className="text-lg font-bold mt-2 mb-1">{line.slice(2)}</h1>;
-    }
-    if (line.startsWith("- ")) {
-      return <li key={idx} className="ml-4 list-disc">{line.slice(2)}</li>;
-    }
-
-    const chunks = line.split(/(\*\*[^*]+\*\*)/g);
-    return (
-      <p key={idx} className="whitespace-pre-wrap">
-        {chunks.map((chunk, index) => {
-          if (chunk.startsWith("**") && chunk.endsWith("**")) {
-            return <strong key={index}>{chunk.slice(2, -2)}</strong>;
-          }
-          return <span key={index}>{chunk}</span>;
-        })}
-      </p>
-    );
-  });
 }
 
 function MessageBubble({ message }: { message: ChatMessage }) {
@@ -101,7 +73,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
             : "bg-muted text-foreground"
         )}
       >
-        <div>{renderSimpleMarkdown(message.content)}</div>
+        <MarkdownContent content={message.content} className="text-inherit" />
         <div
           className={cn(
             "text-[10px] mt-1",

@@ -19,6 +19,8 @@ export function MarkdownEditor({ file, initialContent, onSave }: MarkdownEditorP
   const [mode, setMode] = useState<"edit" | "preview">("preview");
   const [content, setContent] = useState(initialContent || "");
   const [isSaving, setIsSaving] = useState(false);
+  const fileName = (file.relativePath || file.name || "").toLowerCase();
+  const supportsEditPreviewShortcut = fileName.endsWith(".md") || fileName.endsWith(".txt");
 
   useEffect(() => {
     setContent(initialContent || "");
@@ -37,6 +39,12 @@ export function MarkdownEditor({ file, initialContent, onSave }: MarkdownEditorP
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const isMod = event.metaKey || event.ctrlKey;
+      if (isMod && event.key.toLowerCase() === "e" && supportsEditPreviewShortcut) {
+        event.preventDefault();
+        setMode((prev) => (prev === "edit" ? "preview" : "edit"));
+        return;
+      }
+
       if (isMod && event.key.toLowerCase() === "s") {
         event.preventDefault();
         handleSave().catch(() => undefined);
@@ -45,7 +53,7 @@ export function MarkdownEditor({ file, initialContent, onSave }: MarkdownEditorP
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [content, onSave]);
+  }, [content, onSave, supportsEditPreviewShortcut]);
 
   return (
     <div className="h-full flex flex-col">

@@ -149,12 +149,12 @@ async def course_tree(course_name, request: Request) -> list[ResourceMeta]:
         )
     }
 
-    files = []
+    items = []
     for item_path in course_path.rglob("*"):
-        if item_path.is_dir():
-            continue
-
         rel_path = str(item_path.relative_to(course_path))
+        if item_path.is_dir():
+            rel_path = f"{rel_path}/"
+
         meta: ResourceMeta = rel_to_metadata.get(
             rel_path,
             ResourceMeta(
@@ -166,8 +166,8 @@ async def course_tree(course_name, request: Request) -> list[ResourceMeta]:
         # include metadata
         stat = item_path.stat()
         meta.last_processed = datetime.fromtimestamp(stat.st_mtime)
-        meta.size = stat.st_size
+        meta.size = stat.st_size if item_path.is_file() else 0
 
-        files.append(meta)
-    logger.info("course tree built: course={}, files={}", course_name, len(files))
-    return files
+        items.append(meta)
+    logger.info("course tree built: course={}, entries={}", course_name, len(items))
+    return items

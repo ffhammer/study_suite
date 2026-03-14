@@ -109,8 +109,14 @@ export function buildTree(resources: ResourceMeta[]): WorkspaceFileItem[] {
 
   for (const item of resources) {
     const normalized = item.relative_path.replace(/^\/+/, "");
+    const isFolderEntry = normalized.endsWith("/");
     const parts = normalized.split("/").filter(Boolean);
     if (parts.length === 0) continue;
+
+    if (isFolderEntry) {
+      getOrCreateFolder(parts);
+      continue;
+    }
 
     const fileName = parts[parts.length - 1];
     const parentParts = parts.slice(0, -1);

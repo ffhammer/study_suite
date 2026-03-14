@@ -198,6 +198,34 @@ export const api = {
     );
   },
 
+  createFolder(courseName: string, relativePath: string) {
+    return fetchJSON<{ status: string; path: string }>(
+      `/files/folder-create/${encodeURIComponent(courseName)}/${encodeURI(relativePath)}`,
+      {
+        method: "PUT",
+      }
+    );
+  },
+
+  moveItem(courseName: string, fromPath: string, toPath: string) {
+    return fetchJSON<{ status: string; from: string; to: string }>(
+      `/files/move/${encodeURIComponent(courseName)}`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ from_path: fromPath, to_path: toPath }),
+      }
+    );
+  },
+
+  deleteItem(courseName: string, relativePath: string) {
+    return fetchJSON<{ detail: string }>(
+      `/files/del/${encodeURIComponent(courseName)}/${encodeURI(relativePath)}`,
+      {
+        method: "DELETE",
+      }
+    );
+  },
+
   getRawFileUrl(courseName: string, relativePath: string) {
     return `${API_BASE_URL}/files/raw/${encodeURIComponent(courseName)}/${encodeURI(relativePath)}`;
   },

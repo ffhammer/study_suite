@@ -126,6 +126,8 @@ export function CourseOverview({
         <FileExplorer
           files={files}
           selectedFileId={selectedFileId}
+          selectedCourse={selectedCourse}
+          allowManagement
           onFileSelect={(file) => {
             setSelectedFileId(file.id);
             onOpenFile?.(file);

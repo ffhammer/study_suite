@@ -16,6 +16,7 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse
 from loguru import logger
+from pydantic import BaseModel
 
 from src.backend.config import ApiConfig
 from src.backend.database.db import DataBase
@@ -23,6 +24,11 @@ from src.backend.database.models import ResourceMeta, TextUpdate
 from src.backend.transcription import extract_audio_sync, run_whisper_sync
 
 file_router = APIRouter(prefix="/files", tags=["files"])
+
+
+class MoveItemPayload(BaseModel):
+    from_path: str
+    to_path: str
 
 
 @file_router.get("/raw/{course_name}/{rel_path:path}")
@@ -113,16 +119,28 @@ async def delete_file_or_folder(course_name: str, rel_path: str, request: Reques
     if not item_path.exists():
         raise HTTPException(status_code=404, detail="Item not found")
 
+    normalized = rel_path.strip("/")
+
     # 1. Identify Database Records to delete
-    # We fetch only the ones starting with this path
-    all_meta = await db.query_table(
-        ResourceMeta,
-        where_clauses=[
-            ResourceMeta.course == course_name,
-            ResourceMeta.relative_path.like(f"{rel_path}%"),
-        ],
-        mode="all",
-    )
+    # For folders, delete descendants; for files, delete exact match only.
+    if item_path.is_dir():
+        all_meta = await db.query_table(
+            ResourceMeta,
+            where_clauses=[
+                ResourceMeta.course == course_name,
+                ResourceMeta.relative_path.like(f"{normalized}/%"),
+            ],
+            mode="all",
+        )
+    else:
+        all_meta = await db.query_table(
+            ResourceMeta,
+            where_clauses=[
+                ResourceMeta.course == course_name,
+                ResourceMeta.relative_path == normalized,
+            ],
+            mode="all",
+        )
 
     # 2. Setup a temporary "Backup" location
     # We move it here so we can restore it if the DB fails
@@ -159,6 +177,116 @@ async def delete_file_or_folder(course_name: str, rel_path: str, request: Reques
         raise HTTPException(status_code=500, detail="Could not move file to trash.")
 
     return {"detail": "Deleted successfully"}
+
+
+@file_router.put("/folder-create/{course_name}/{rel_path:path}")
+async def create_folder(course_name: str, rel_path: str, request: Request):
+    config: ApiConfig = request.app.state.config
+    normalized = rel_path.strip("/")
+    logger.info(
+        "folder create requested: course={}, rel_path={}", course_name, normalized
+    )
+
+    if not normalized:
+        raise HTTPException(status_code=400, detail="Folder path cannot be empty")
+
+    folder_path = config.save_join_file_path(course_name, normalized)
+    if folder_path.exists():
+        raise HTTPException(status_code=409, detail="Folder already exists")
+
+    try:
+        folder_path.mkdir(parents=True, exist_ok=False)
+        return {"status": "created", "path": normalized}
+    except Exception as e:
+        logger.error(f"Failed to create folder: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create folder")
+
+
+@file_router.put("/move/{course_name}")
+async def move_item(course_name: str, payload: MoveItemPayload, request: Request):
+    db: DataBase = request.app.state.db
+    config: ApiConfig = request.app.state.config
+
+    from_rel = payload.from_path.strip("/")
+    to_rel = payload.to_path.strip("/")
+    logger.info(
+        "move requested: course={}, from={}, to={}", course_name, from_rel, to_rel
+    )
+
+    if not from_rel or not to_rel:
+        raise HTTPException(
+            status_code=400, detail="from_path and to_path are required"
+        )
+    if from_rel == to_rel:
+        return {"status": "unchanged", "from": from_rel, "to": to_rel}
+
+    src_path = config.save_join_file_path(course_name, from_rel)
+    dst_path = config.save_join_file_path(course_name, to_rel)
+
+    if not src_path.exists():
+        raise HTTPException(status_code=404, detail="Source item not found")
+    if dst_path.exists():
+        raise HTTPException(status_code=409, detail="Target already exists")
+
+    if src_path.is_dir() and (dst_path == src_path or src_path in dst_path.parents):
+        raise HTTPException(status_code=400, detail="Cannot move folder into itself")
+
+    if src_path.is_dir():
+        metas = await db.query_table(
+            ResourceMeta,
+            where_clauses=[
+                ResourceMeta.course == course_name,
+                ResourceMeta.relative_path.like(f"{from_rel}/%"),
+            ],
+            mode="all",
+        )
+    else:
+        metas = await db.query_table(
+            ResourceMeta,
+            where_clauses=[
+                ResourceMeta.course == course_name,
+                ResourceMeta.relative_path == from_rel,
+            ],
+            mode="all",
+        )
+
+    previous_paths = {
+        meta.id: meta.relative_path for meta in metas if meta.id is not None
+    }
+    dst_path.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        shutil.move(str(src_path), str(dst_path))
+
+        for meta in metas:
+            rel = meta.relative_path
+            if rel == from_rel:
+                meta.relative_path = to_rel
+            elif rel.startswith(f"{from_rel}/"):
+                suffix = rel[len(from_rel) :]
+                meta.relative_path = f"{to_rel}{suffix}"
+            await db.save(meta)
+
+        return {"status": "moved", "from": from_rel, "to": to_rel}
+
+    except Exception as e:
+        logger.error(f"Move failed: {e}")
+
+        if dst_path.exists() and not src_path.exists():
+            try:
+                shutil.move(str(dst_path), str(src_path))
+            except Exception as rollback_error:
+                logger.error(f"Filesystem rollback failed: {rollback_error}")
+
+        for meta in metas:
+            if meta.id in previous_paths:
+                meta.relative_path = previous_paths[meta.id]
+                try:
+                    await db.save(meta)
+                except Exception as rollback_db_error:
+                    logger.error(f"Metadata rollback failed: {rollback_db_error}")
+
+        raise HTTPException(status_code=500, detail="Move failed")
 
 
 @file_router.get("/text-content/{course_name}/{rel_path:path}")

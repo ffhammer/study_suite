@@ -129,10 +129,10 @@ export function CourseWorkspace({
     if (selectedFile?.type === "file") {
       loadTextContent(selectedFile).catch(() => undefined);
     }
-    if (secondaryFile?.type === "file") {
+    if (splitScreen && secondaryFile?.type === "file") {
       loadTextContent(secondaryFile).catch(() => undefined);
     }
-  }, [selectedFile, secondaryFile, selectedCourse, loadTextContent]);
+  }, [selectedFile, secondaryFile, splitScreen, selectedCourse, loadTextContent]);
 
   const handleFileSelect = (file: WorkspaceFileItem) => {
     if (file.type === "folder") return;
@@ -288,6 +288,14 @@ export function CourseWorkspace({
       return (
         <div className="h-full flex items-center justify-center bg-card text-muted-foreground text-sm">
           Select a course to begin.
+        </div>
+      );
+    }
+
+    if (file.type === "binary") {
+      return (
+        <div className="h-full flex items-center justify-center bg-card text-muted-foreground text-sm px-4 text-center">
+          This file type cannot be edited as text. Use media preview for audio/video, or open/download it externally.
         </div>
       );
     }

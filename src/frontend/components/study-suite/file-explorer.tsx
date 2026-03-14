@@ -20,6 +20,8 @@ function FileIcon({ type }: { type: WorkspaceFileItem["type"] }) {
       return <Folder className="h-4 w-4 text-muted-foreground" />;
     case "media":
       return <Video className="h-4 w-4 text-blue-400" />;
+    case "binary":
+      return <FileText className="h-4 w-4 text-amber-400" />;
     case "file":
     default:
       return <FileText className="h-4 w-4 text-muted-foreground" />;

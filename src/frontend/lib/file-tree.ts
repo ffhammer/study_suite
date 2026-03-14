@@ -1,6 +1,6 @@
 import { ResourceMeta } from "@/lib/api";
 
-export type WorkspaceFileType = "folder" | "file" | "media";
+export type WorkspaceFileType = "folder" | "file" | "media" | "binary";
 
 export interface WorkspaceFileItem {
   id: string;
@@ -27,9 +27,46 @@ const mediaExtensions = new Set([
   ".avi",
 ]);
 
+const textExtensions = new Set([
+  ".txt",
+  ".md",
+  ".markdown",
+  ".json",
+  ".yaml",
+  ".yml",
+  ".toml",
+  ".ini",
+  ".csv",
+  ".tsv",
+  ".html",
+  ".htm",
+  ".css",
+  ".scss",
+  ".js",
+  ".jsx",
+  ".ts",
+  ".tsx",
+  ".py",
+  ".java",
+  ".c",
+  ".cpp",
+  ".h",
+  ".hpp",
+  ".go",
+  ".rs",
+  ".sh",
+  ".sql",
+  ".xml",
+  ".log",
+  ".ipynb",
+]);
+
 function detectFileType(fileName: string): WorkspaceFileType {
-  const ext = fileName.slice(fileName.lastIndexOf(".")).toLowerCase();
-  return mediaExtensions.has(ext) ? "media" : "file";
+  const dotIndex = fileName.lastIndexOf(".");
+  const ext = dotIndex >= 0 ? fileName.slice(dotIndex).toLowerCase() : "";
+  if (mediaExtensions.has(ext)) return "media";
+  if (textExtensions.has(ext) || ext === "") return "file";
+  return "binary";
 }
 
 function makeId(value: string): string {

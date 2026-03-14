@@ -139,16 +139,6 @@ function FileTreeItem({
         )}
         <FileIcon type={item.type} />
         <span className="truncate flex-1 text-left">{item.name}</span>
-        {!isFolder && (
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-              {item.lastProcessed ? new Date(item.lastProcessed).toLocaleDateString() : "-"}
-            </span>
-            <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-              {formatBytes(item.size)}
-            </span>
-          </div>
-        )}
         {allowManagement && itemPath && (
           <div className="ml-2 flex items-center gap-1">
             {canDownload && !isFolder && (
@@ -188,6 +178,16 @@ function FileTreeItem({
             </button>
           </div>
         )}
+        {!isFolder && (
+          <div className="flex items-center gap-2 ml-auto">
+            <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+              {item.lastProcessed ? new Date(item.lastProcessed).toLocaleDateString() : "-"}
+            </span>
+            <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+              {formatBytes(item.size)}
+            </span>
+          </div>
+        )}
       </div>
       {isFolder && isExpanded && item.children && (
         <div>
@@ -198,7 +198,7 @@ function FileTreeItem({
               depth={depth + 1}
               selectedFileId={selectedFileId}
               onFileSelect={onFileSelect}
-              canDownload={canDownload}
+              canDownload={true}
               onDownload={onDownload}
               allowManagement={allowManagement}
               onRename={onRename}
@@ -371,7 +371,7 @@ export function FileExplorer({
               depth={0}
               selectedFileId={selectedFileId}
               onFileSelect={onFileSelect}
-              canDownload={Boolean(selectedCourse && item.type !== "folder")}
+              canDownload={true}
               onDownload={downloadItem}
               allowManagement={allowManagement}
               onRename={(target) => {
